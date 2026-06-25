@@ -4,5 +4,6 @@ data_cache/
 cache/
 *.parquet
 run.log
+paper_trading/
 .venv/
 .DS_Store

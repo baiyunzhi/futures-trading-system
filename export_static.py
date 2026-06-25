@@ -11,6 +11,7 @@ from pathlib import Path
 
 import plotly.graph_objects as go
 import plotly.io as pio
+import pandas as pd
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger("export")
@@ -39,7 +40,9 @@ def build():
     from variety_selector import rank_symbols
     from market_analyzer import analyze_all, results_to_dataframe, get_detail_text
     from backtester import backtest_portfolio
-    from dashboard import build_score_heatmap, build_kline_chart, build_equity_chart
+    from dashboard import build_score_heatmap, build_kline_chart, build_equity_chart, build_paper_equity_chart
+    from paper_trading import run_paper_session
+    import strategy_trend as st_trend
 
     logger.info("加载数据 + 计算指标...")
     all_data = get_all_data(use_cache=True)
@@ -51,6 +54,7 @@ def build():
     state_df = results_to_dataframe(analysis_results)
     portfolio_result = backtest_portfolio(all_data_ind, symbols=list(all_data_ind.keys()))
     summary_df = portfolio_result.get("summary")
+    paper_report = run_paper_session(all_data_ind, st_trend.generate_signals, symbols=list(all_data_ind.keys()))
 
     # ── 渲染图表 ──
     logger.info("渲染图表...")
@@ -60,6 +64,7 @@ def build():
     parts = []
     parts.append(_fig_html(build_score_heatmap(rank_df), "heatmap", include_js=True))
     parts.append(_fig_html(build_equity_chart(portfolio_result.get("results", {})), "equity", include_js=False))
+    parts.append(_fig_html(build_paper_equity_chart(paper_report), "paper-equity", include_js=False))
 
     # 每个品种的K线图 + 行情深度分析文字，预渲染，用 JS 下拉切换显示
     import html as _htmlmod
@@ -97,6 +102,17 @@ def build():
 
     summary_table = df_to_table(summary_df, "tbl")
     state_table = df_to_table(state_df, "tbl")
+    paper_account = paper_report.get("account", {})
+    paper_positions = pd.DataFrame(paper_report.get("positions", []))
+    paper_fills = pd.DataFrame(list(reversed(paper_report.get("fills", [])))[:30])
+    paper_positions_table = df_to_table(
+        paper_positions[[c for c in ["symbol", "name", "direction", "entry_date", "entry_price", "lots", "stop_loss", "target"] if c in paper_positions.columns]],
+        "tbl",
+    )
+    paper_fills_table = df_to_table(
+        paper_fills[[c for c in ["date", "symbol", "action", "direction", "price", "lots", "net_pnl", "reason"] if c in paper_fills.columns]],
+        "tbl",
+    )
 
     from datetime import datetime
     updated = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -108,6 +124,15 @@ def build():
     html = TEMPLATE.format(
         heatmap=parts[0],
         equity=parts[1],
+        paper_equity=parts[2],
+        paper_equity_value=f"{paper_account.get('equity', 0):,.2f}",
+        paper_return=f"{paper_account.get('return_pct', 0):+.2f}%",
+        paper_positions_count=paper_account.get("open_positions", 0),
+        paper_closed_trades=paper_account.get("closed_trades", 0),
+        paper_win_rate=f"{paper_account.get('win_rate', 0):.1f}%",
+        paper_halted="ON" if paper_account.get("halted") else "OFF",
+        paper_positions_table=paper_positions_table,
+        paper_fills_table=paper_fills_table,
         kline_boxes="\n".join(kline_divs),
         detail_boxes="\n".join(detail_divs),
         options=options,
@@ -145,6 +170,11 @@ TEMPLATE = """<!DOCTYPE html>
   .kline-col{{flex:1;min-width:480px}}
   .detail-col{{width:340px;min-width:300px;background:#0e1117;border:1px solid #2a2a3e;border-radius:6px;padding:12px}}
   .dbox{{color:#ccc;font-size:12px;white-space:pre-wrap;word-break:break-word;max-height:680px;overflow-y:auto;margin:0;font-family:'Consolas','SF Mono',monospace;line-height:1.6}}
+  .metric-row{{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:10px;margin-bottom:12px}}
+  .metric{{background:#0e1117;border:1px solid #2a2a3e;border-radius:6px;padding:10px}}
+  .metric span{{display:block;color:#888;font-size:12px}}
+  .metric strong{{display:block;color:#e0e0e0;font-size:18px;margin-top:4px}}
+  @media(max-width:900px){{.metric-row{{grid-template-columns:repeat(2,minmax(120px,1fr))}}}}
 </style>
 </head>
 <body>
@@ -176,6 +206,23 @@ TEMPLATE = """<!DOCTYPE html>
   <div class="card">
     <h2>各品种回测净值曲线</h2>
     {equity}
+  </div>
+
+  <div class="card">
+    <h2>本地模拟盘</h2>
+    <div class="metric-row">
+      <div class="metric"><span>权益</span><strong>{paper_equity_value}</strong></div>
+      <div class="metric"><span>收益率</span><strong>{paper_return}</strong></div>
+      <div class="metric"><span>持仓</span><strong>{paper_positions_count}</strong></div>
+      <div class="metric"><span>平仓笔数</span><strong>{paper_closed_trades}</strong></div>
+      <div class="metric"><span>胜率</span><strong>{paper_win_rate}</strong></div>
+      <div class="metric"><span>熔断</span><strong>{paper_halted}</strong></div>
+    </div>
+    {paper_equity}
+    <h2>当前持仓</h2>
+    {paper_positions_table}
+    <h2 style="margin-top:14px">最近成交</h2>
+    {paper_fills_table}
   </div>
 
   <div class="grid">

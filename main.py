@@ -107,6 +107,19 @@ def main():
         for _, row in merged.sort_values("总收益%_趋势", ascending=False).head(8).iterrows():
             logger.info(f"    {row['品种']:8s}  趋势={row['总收益%_趋势']:+.1f}%  突破={row['总收益%_突破']:+.1f}%")
 
+    # ── 6. 本地模拟盘 ──
+    logger.info("Step 6/6  本地模拟盘回放...")
+    from paper_trading import run_paper_session
+    paper_report = run_paper_session(
+        all_data_ind,
+        st_trend.generate_signals,
+        symbols=syms,
+    )
+    pa = paper_report.get("account", {})
+    logger.info(f"  模拟盘: 权益={pa.get('equity', 0):,.2f}  "
+                f"收益={pa.get('return_pct', 0):+.2f}%  "
+                f"平仓={pa.get('closed_trades', 0)}  胜率={pa.get('win_rate', 0):.1f}%")
+
     # ── 启动仪表板 ──
     logger.info("")
     logger.info("  启动可视化仪表板...")
@@ -122,6 +135,7 @@ def main():
         bt_results_bo    = bt_bo.get("results", {}),
         bt_results_range = bt_range.get("results", {}),
         all_data         = all_data_ind,
+        paper_report     = paper_report,
     )
     app.run(debug=False, host="127.0.0.1", port=8050)
 

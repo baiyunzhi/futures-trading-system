@@ -194,6 +194,41 @@ def build_equity_chart(bt_results: dict) -> go.Figure:
     return fig
 
 
+def build_paper_equity_chart(paper_report: dict) -> go.Figure:
+    """Paper trading equity curve."""
+    rows = paper_report.get("equity_curve", []) if paper_report else []
+    fig = go.Figure()
+    if not rows:
+        fig.add_annotation(text="暂无模拟盘数据", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+        fig.update_layout(template="plotly_dark", paper_bgcolor="#0e1117", plot_bgcolor="#0e1117", height=250)
+        return fig
+    df = pd.DataFrame(rows)
+    fig.add_trace(go.Scatter(x=df["date"], y=df["equity"], name="权益", line=dict(color="#26a69a", width=2)))
+    fig.add_trace(go.Scatter(x=df["date"], y=df["cash"], name="现金", line=dict(color="#FFD700", width=1.2)))
+    fig.update_layout(
+        template="plotly_dark", paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
+        height=260, margin=dict(l=40, r=20, t=20, b=40),
+        legend=dict(orientation="h", y=1.05, x=1, xanchor="right"),
+    )
+    return fig
+
+
+def _paper_table(records: list[dict], columns: list[str], page_size: int = 8):
+    data = [{col: row.get(col, "") for col in columns} for row in records]
+    return dash_table.DataTable(
+        columns=[{"name": col, "id": col} for col in columns],
+        data=data,
+        page_size=page_size,
+        sort_action="native",
+        style_table={"overflowX": "auto"},
+        style_cell={"backgroundColor": "#0e1117", "color": "#ccc",
+                    "border": "1px solid #2a2a3e", "fontSize": "12px",
+                    "padding": "4px 8px", "textAlign": "center"},
+        style_header={"backgroundColor": "#161b27", "fontWeight": "bold",
+                      "color": "#aaa", "border": "1px solid #333"},
+    )
+
+
 # ─────────────────────────────────────────────
 #  Dash App 组装
 # ─────────────────────────────────────────────
@@ -252,6 +287,7 @@ def create_app(
     all_data:      dict[str, pd.DataFrame],
     bt_results_bo:    dict | None = None,   # 突破策略回测结果（可选）
     bt_results_range: dict | None = None,   # 区间策略回测结果（可选）
+    paper_report: dict | None = None,
 ) -> dash.Dash:
     if dash is None or dbc is None:
         raise RuntimeError("缺少 Dash 依赖，请先运行: pip install -r requirements.txt")
@@ -264,6 +300,10 @@ def create_app(
     sym_map   = {r.symbol: r for r in all_results}
     symbols   = [r.symbol for r in all_results]
     first_sym = symbols[0] if symbols else ""
+    paper_report = paper_report or {}
+    paper_account = paper_report.get("account", {})
+    paper_positions = paper_report.get("positions", [])
+    paper_fills = list(reversed(paper_report.get("fills", [])))[:50]
 
     # ── 状态徽章 ──
     def _badge(state):
@@ -321,6 +361,47 @@ def create_app(
                 html.Div("品种总数", style={"color": "#aaa", "fontWeight": "bold"}),
                 html.H4(str(len(all_results)), style={"color": "#aaa", "margin": "0"}),
             ], style={**CARD, "textAlign": "center"}), width=2),
+        ], className="mb-3"),
+
+        # ── 模拟盘面板 ──
+        dbc.Row([
+            dbc.Col([
+                dbc.Card([
+                    html.H6("本地模拟盘", style={"color": "#26a69a", "marginBottom": "8px"}),
+                    dbc.Row([
+                        dbc.Col(html.Div([
+                            html.Small("权益", style={"color": "#888"}),
+                            html.H5(f"{paper_account.get('equity', 0):,.2f}", style={"margin": "0", "color": "#26a69a"}),
+                        ]), width=2),
+                        dbc.Col(html.Div([
+                            html.Small("收益率", style={"color": "#888"}),
+                            html.H5(f"{paper_account.get('return_pct', 0):+.2f}%", style={"margin": "0", "color": "#FFD700"}),
+                        ]), width=2),
+                        dbc.Col(html.Div([
+                            html.Small("持仓", style={"color": "#888"}),
+                            html.H5(str(paper_account.get("open_positions", 0)), style={"margin": "0"}),
+                        ]), width=2),
+                        dbc.Col(html.Div([
+                            html.Small("平仓笔数", style={"color": "#888"}),
+                            html.H5(str(paper_account.get("closed_trades", 0)), style={"margin": "0"}),
+                        ]), width=2),
+                        dbc.Col(html.Div([
+                            html.Small("胜率", style={"color": "#888"}),
+                            html.H5(f"{paper_account.get('win_rate', 0):.1f}%", style={"margin": "0"}),
+                        ]), width=2),
+                        dbc.Col(html.Div([
+                            html.Small("熔断", style={"color": "#888"}),
+                            html.H5("ON" if paper_account.get("halted") else "OFF",
+                                    style={"margin": "0", "color": "#ef5350" if paper_account.get("halted") else "#26a69a"}),
+                        ]), width=2),
+                    ], className="mb-2"),
+                    dcc.Graph(figure=build_paper_equity_chart(paper_report), config={"displayModeBar": False}),
+                    html.H6("当前持仓", style={"color": "#aaa", "marginTop": "8px"}),
+                    _paper_table(paper_positions, ["symbol", "name", "direction", "entry_date", "entry_price", "lots", "stop_loss", "target"], 5),
+                    html.H6("最近成交", style={"color": "#aaa", "marginTop": "8px"}),
+                    _paper_table(paper_fills, ["date", "symbol", "action", "direction", "price", "lots", "net_pnl", "reason"], 8),
+                ], style=CARD),
+            ], width=12),
         ], className="mb-3"),
 
         # ── K线图 + 详情 ──

@@ -14,6 +14,7 @@
 | 信号生成 | `signal_generator.py` | 交易信号 |
 | 风险管理 | `risk_manager.py` | 仓位与风险控制 |
 | 回测 | `backtester.py` | 组合历史回测，输出收益/胜率/夏普 |
+| 本地模拟盘 | `paper_trading.py` / `run_paper.py` | 回放撮合、委托、成交、持仓、资金曲线 |
 | 可视化 | `dashboard.py` | Dash 交互式仪表板 |
 | 主入口 | `main.py` | 串联全流程并启动仪表板 |
 
@@ -39,6 +40,24 @@ python export_static.py
 生成文件：`docs/index.html`
 
 GitHub Pages 可直接选择 `main` 分支的 `/docs` 目录发布。
+
+## 本地模拟盘
+
+```bash
+python run_paper.py
+```
+
+输出目录：`paper_trading/`
+
+| 文件 | 内容 |
+|------|------|
+| `account.json` | 模拟账户摘要 |
+| `orders.csv` | 委托记录 |
+| `fills.csv` | 成交记录 |
+| `positions.csv` | 当前持仓 |
+| `equity_curve.csv` | 权益曲线 |
+
+模拟盘只做本地历史回放撮合，不连接真实期货账户，不会真实下单。
 
 ## 数据说明
 

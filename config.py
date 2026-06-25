@@ -104,3 +104,12 @@ BACKTEST_PARAMS = {
     "start_date": "2023-01-01",
     "end_date":   "2024-12-31",
 }
+
+# ---------- 本地模拟盘设置 ----------
+PAPER_PARAMS = {
+    "enabled": True,
+    "start_date": "2024-01-01",
+    "end_date": None,
+    "storage_dir": "paper_trading",
+    "max_daily_loss_pct": 0.03,
+}
