@@ -39,7 +39,7 @@ def build():
     from variety_selector import rank_symbols
     from market_analyzer import analyze_all, results_to_dataframe
     from backtester import backtest_portfolio
-    from dashboard import make_score_heatmap, make_kline_chart, make_equity_curve
+    from dashboard import build_score_heatmap, build_kline_chart, build_equity_chart
 
     logger.info("加载数据 + 计算指标...")
     all_data = get_all_data(use_cache=True)
@@ -54,15 +54,18 @@ def build():
 
     # ── 渲染图表 ──
     logger.info("渲染图表...")
+    # AnalysisResult 列表 → symbol 映射（K线图需要传入对应 result）
+    result_map = {r.symbol: r for r in analysis_results}
+
     parts = []
-    parts.append(_fig_html(make_score_heatmap(rank_df), "heatmap", include_js=True))
-    parts.append(_fig_html(make_equity_curve(portfolio_result), "equity", include_js=False))
+    parts.append(_fig_html(build_score_heatmap(rank_df), "heatmap", include_js=True))
+    parts.append(_fig_html(build_equity_chart(portfolio_result.get("results", {})), "equity", include_js=False))
 
     # 每个品种的K线图预渲染，用 JS 下拉切换显示
     kline_divs = []
     symbols = list(all_data_ind.keys())
     for i, sym in enumerate(symbols):
-        div = _fig_html(make_kline_chart(sym, all_data_ind[sym]), f"kline-{sym}", include_js=False)
+        div = _fig_html(build_kline_chart(all_data_ind[sym], sym, result_map.get(sym)), f"kline-{sym}", include_js=False)
         display = "block" if i == 0 else "none"
         kline_divs.append(f'<div class="kbox" id="box-{sym}" style="display:{display}">{div}</div>')
 

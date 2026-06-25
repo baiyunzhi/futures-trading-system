@@ -82,10 +82,10 @@ def main():
 
     from dashboard import create_app
     app = create_app(
-        rank_df           = rank_df,
-        analysis_results  = analysis_results,
-        all_data_ind      = all_data_ind,
-        portfolio_result  = portfolio_result,
+        all_results = analysis_results,
+        rank_df     = rank_df,
+        bt_results  = portfolio_result.get("results", {}),
+        all_data    = all_data_ind,
     )
     app.run(debug=False, host="127.0.0.1", port=8050)
 

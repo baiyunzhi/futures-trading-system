@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from config import SCORE_WEIGHTS, ALL_SYMBOLS, SYMBOL_SECTOR
 from indicators import add_all_indicators, get_latest_row
+from kline_density import analyze_density
 
 
 # ─────────────────────────────────────────────
@@ -101,6 +102,7 @@ def _volatility_score(row: pd.Series, df: pd.DataFrame) -> float:
 def score_symbol(symbol: str, df: pd.DataFrame) -> dict:
     """
     对单个品种打综合分，返回详情字典。
+    密度评分作为惩罚项：K线越拥挤，总分扣分越多（最多扣35分）。
     """
     df_ind = add_all_indicators(df)
     row    = get_latest_row(df_ind)
@@ -109,31 +111,40 @@ def score_symbol(symbol: str, df: pd.DataFrame) -> dict:
     ms = _momentum_score(row, df_ind)
     vs = _volatility_score(row, df_ind)
 
-    total = (
+    base_score = (
         ts * SCORE_WEIGHTS["trend"]
         + ms * SCORE_WEIGHTS["momentum"]
         + vs * SCORE_WEIGHTS["volatility"]
     )
 
+    # ── K线密度惩罚 ──
+    density = analyze_density(df_ind)
+    total   = max(0.0, base_score - density.penalty)
+
     # 趋势方向：MA5 与 MA20 比较
     direction = "多" if row.get("MA5", 0) > row.get("MA20", 0) else "空"
 
     return {
-        "symbol":      symbol,
-        "name":        ALL_SYMBOLS.get(symbol, symbol),
-        "sector":      SYMBOL_SECTOR.get(symbol, ""),
-        "score":       round(total, 1),
-        "trend_score": round(ts, 1),
-        "mom_score":   round(ms, 1),
-        "vol_score":   round(vs, 1),
-        "direction":   direction,
-        "close":       round(float(row.get("close", 0)), 1),
-        "atr":         round(float(row.get("ATR", 0)), 1),
-        "rsi":         round(float(row.get("RSI", 50)), 1),
-        "adx":         round(float(row.get("ADX", 0)), 1),
-        "ma5":         round(float(row.get("MA5", 0)), 1),
-        "ma20":        round(float(row.get("MA20", 0)), 1),
-        "df_ind":      df_ind,    # 保留指标数据供后续使用
+        "symbol":        symbol,
+        "name":          ALL_SYMBOLS.get(symbol, symbol),
+        "sector":        SYMBOL_SECTOR.get(symbol, ""),
+        "score":         round(total, 1),
+        "base_score":    round(base_score, 1),
+        "trend_score":   round(ts, 1),
+        "mom_score":     round(ms, 1),
+        "vol_score":     round(vs, 1),
+        "density_score": density.score,
+        "density_label": density.label,
+        "density_color": density.color,
+        "direction":     direction,
+        "close":         round(float(row.get("close", 0)), 1),
+        "atr":           round(float(row.get("ATR", 0)), 1),
+        "rsi":           round(float(row.get("RSI", 50)), 1),
+        "adx":           round(float(row.get("ADX", 0)), 1),
+        "ma5":           round(float(row.get("MA5", 0)), 1),
+        "ma20":          round(float(row.get("MA20", 0)), 1),
+        "df_ind":        df_ind,
+        "density":       density,   # 完整密度对象供后续使用
     }
 
 
@@ -155,7 +166,7 @@ def rank_symbols(all_data: dict[str, pd.DataFrame]) -> pd.DataFrame:
     rank_df = pd.DataFrame(rows)
     if not rank_df.empty:
         rank_df = rank_df.sort_values("score", ascending=False).reset_index(drop=True)
-        rank_df.index += 1   # 排名从 1 开始
+        rank_df.index += 1
     return rank_df
 
 

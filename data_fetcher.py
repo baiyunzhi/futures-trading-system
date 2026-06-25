@@ -107,7 +107,7 @@ def _generate_sample_data(symbol: str, days: int = 500) -> pd.DataFrame:
 # ─────────────────────────────────────────────
 
 def _cache_path(symbol: str) -> Path:
-    return CACHE_DIR / f"{symbol}.parquet"
+    return CACHE_DIR / f"{symbol}.csv"
 
 
 def _is_cache_valid(path: Path) -> bool:
@@ -130,7 +130,7 @@ def get_data(symbol: str, use_cache: bool = True) -> pd.DataFrame:
 
     if use_cache and _is_cache_valid(path):
         logger.info(f"[缓存] 读取 {symbol}")
-        return pd.read_parquet(path)
+        return pd.read_csv(path, parse_dates=["date"])
 
     logger.info(f"[拉取] {symbol} ({ALL_SYMBOLS.get(symbol, symbol)})")
     df = _fetch_from_akshare(symbol)
@@ -142,7 +142,7 @@ def get_data(symbol: str, use_cache: bool = True) -> pd.DataFrame:
     else:
         df["is_simulated"] = False
 
-    df.to_parquet(path, index=False)
+    df.to_csv(path, index=False)
     return df
 
 

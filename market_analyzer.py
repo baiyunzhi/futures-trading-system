@@ -1,14 +1,17 @@
 # ============================================================
-#  市场状态分析模块
-#  客观判断每个品种当前处于哪种状态，给出明确的操作建议
+#  市场状态分析模块（v2）
+#  整合：价格结构 + 技术指标 + 量能 + 持仓量 → 四维综合判断
 # ============================================================
 
 from __future__ import annotations
 import numpy as np
 import pandas as pd
-from dataclasses import dataclass
-from config import STATE_THRESHOLDS
+from dataclasses import dataclass, field
+from config import STATE_THRESHOLDS, RISK_PARAMS
 from indicators import add_all_indicators, get_latest_row
+from structure_analyzer import analyze_structure, StructureState
+from volume_oi_analyzer import analyze_vol_oi, VolOIResult
+from kline_density import analyze_density, DensityResult
 
 
 # ─────────────────────────────────────────────
@@ -16,214 +19,310 @@ from indicators import add_all_indicators, get_latest_row
 # ─────────────────────────────────────────────
 
 class MarketState:
-    OBSERVE      = "⚪ 观望"        # 无明确信号，等待
-    LIGHT_LONG   = "🟡 轻仓做多"   # 短线多头信号，小仓
-    LIGHT_SHORT  = "🟡 轻仓做空"   # 短线空头信号，小仓
-    TREND_LONG   = "🟢 趋势做多"   # 强趋势上行，中等仓位
-    TREND_SHORT  = "🔴 趋势做空"   # 强趋势下行，中等仓位
+    OBSERVE      = "⚪ 观望"
+    LIGHT_LONG   = "🟡 轻仓做多"
+    LIGHT_SHORT  = "🟡 轻仓做空"
+    TREND_LONG   = "🟢 趋势做多"
+    TREND_SHORT  = "🔴 趋势做空"
 
+
+# ─────────────────────────────────────────────
+#  四维分析结果
+# ─────────────────────────────────────────────
 
 @dataclass
 class AnalysisResult:
     symbol:    str
-    state:     str
-    score:     float
-    direction: str          # "多" / "空" / "中性"
-    reason:    str          # 文字描述判断依据
-    stop_loss: float        # 参考止损价
-    target:    float        # 参考止盈价
-    entry:     float        # 参考入场价（当前收盘）
+    name:      str
+
+    # ── 核心状态 ──
+    state:     str            # MarketState 中的一个
+    score:     float          # 品种综合评分
+
+    # ── 价格结构 ──
+    structure: StructureState
+
+    # ── 技术指标摘要 ──
+    direction:   str          # "多" / "空"
+    rsi:         float
+    adx:         float
+    macd_signal: str          # "金叉" / "死叉" / "中性"
+
+    # ── 量价持仓 ──
+    vol_oi: VolOIResult
+
+    # ── K线密度 ──
+    density: DensityResult
+
+    # ── 交易参数 ──
+    entry:     float
+    stop_loss: float
+    target:    float
     atr:       float
 
+    # ── 综合描述（自然语言）──
+    full_description: str
+
 
 # ─────────────────────────────────────────────
-#  状态判断
+#  自然语言行情描述生成
 # ─────────────────────────────────────────────
 
-def _build_reason(row: pd.Series, state: str) -> str:
-    """生成文字说明。"""
-    parts = []
+def _build_full_description(
+    name:      str,
+    state:     str,
+    structure: StructureState,
+    row:       pd.Series,
+    vol_oi:    VolOIResult,
+    density:   "DensityResult",
+    entry:     float,
+    stop:      float,
+    target:    float,
+) -> str:
+    """生成完整的中文行情描述，涵盖五个维度。"""
+    lines = []
 
-    # MA 排列
-    ma5, ma20, ma60 = row.get("MA5"), row.get("MA20"), row.get("MA60")
-    if pd.notna(ma5) and pd.notna(ma20):
-        if ma5 > ma20:
-            parts.append("MA5>MA20(多头排列)")
-        else:
-            parts.append("MA5<MA20(空头排列)")
+    # ① K线密度（最先看，决定是否参与）
+    density_warn = ""
+    if not density.tradeable:
+        density_warn = " ⚠️ 当前密度过高，建议以下分析仅供参考，操作需谨慎"
+    lines.append(f"【密度】{density.description}{density_warn}")
 
-    # RSI
-    rsi = row.get("RSI")
-    if pd.notna(rsi):
-        if rsi > 70:
-            parts.append(f"RSI={rsi:.0f}(超买)")
-        elif rsi < 30:
-            parts.append(f"RSI={rsi:.0f}(超卖)")
-        else:
-            parts.append(f"RSI={rsi:.0f}")
+    # ② 价格结构
+    lines.append(f"【结构】{structure.description}")
+    lines.append(
+        f"  支撑：{structure.support:.1f}  |  阻力：{structure.resistance:.1f}  "
+        f"|  区间：{structure.recent_low:.1f}~{structure.recent_high:.1f}"
+        f"（幅度 {structure.pivot_range_pct:.1f}%）"
+    )
 
-    # MACD
-    dif, dea = row.get("DIF"), row.get("DEA")
-    if pd.notna(dif) and pd.notna(dea):
-        cross = "金叉" if dif > dea else "死叉"
-        parts.append(f"MACD{cross}")
+    # ③ 技术指标
+    rsi  = row.get("RSI", 50)
+    adx  = row.get("ADX", 0)
+    dif  = row.get("DIF", 0)
+    dea  = row.get("DEA", 0)
+    ma5  = row.get("MA5", entry)
+    ma20 = row.get("MA20", entry)
+    ma60 = row.get("MA60", entry)
 
-    # ADX
-    adx = row.get("ADX")
-    if pd.notna(adx):
-        if adx > 40:
-            parts.append(f"ADX={adx:.0f}(强趋势)")
-        elif adx > 25:
-            parts.append(f"ADX={adx:.0f}(有趋势)")
-        else:
-            parts.append(f"ADX={adx:.0f}(震荡)")
+    rsi_desc  = (f"RSI={rsi:.0f}超买" if rsi > 70 else
+                 f"RSI={rsi:.0f}超卖" if rsi < 30 else f"RSI={rsi:.0f}")
+    macd_desc = "MACD金叉" if dif > dea else "MACD死叉"
+    ma_desc   = ("多头排列" if ma5 > ma20 > ma60 else
+                 "空头排列" if ma5 < ma20 < ma60 else "均线整理")
+    adx_desc  = (f"ADX={adx:.0f}强趋势" if adx > 40 else
+                 f"ADX={adx:.0f}有趋势" if adx > 25 else f"ADX={adx:.0f}震荡")
+    lines.append(f"【指标】{ma_desc}；{macd_desc}；{rsi_desc}；{adx_desc}")
 
-    return "；".join(parts)
+    # ④ 量价持仓
+    lines.append(f"【量能】{vol_oi.vol_state.label}——{vol_oi.vol_state.description}")
+    oi = vol_oi.oi_state
+    if oi.code != "NO_DATA":
+        lines.append(f"【持仓】{oi.label}——{oi.description}")
+    else:
+        lines.append("【持仓】暂无持仓量数据，建议参考交易所持仓排行")
 
+    # ⑤ 操作建议
+    action_map = {
+        MarketState.OBSERVE:     "暂不操作，等待信号明确",
+        MarketState.LIGHT_LONG:  f"轻仓做多，入场约 {entry:.1f}，止损 {stop:.1f}，目标 {target:.1f}",
+        MarketState.LIGHT_SHORT: f"轻仓做空，入场约 {entry:.1f}，止损 {stop:.1f}，目标 {target:.1f}",
+        MarketState.TREND_LONG:  f"趋势做多，入场约 {entry:.1f}，止损 {stop:.1f}（2xATR），目标 {target:.1f}（3xATR）",
+        MarketState.TREND_SHORT: f"趋势做空，入场约 {entry:.1f}，止损 {stop:.1f}（2xATR），目标 {target:.1f}（3xATR）",
+    }
+    lines.append(f"【操作】{action_map.get(state, '观望')}")
+
+    return "\n".join(lines)
+
+
+# ─────────────────────────────────────────────
+#  状态判断逻辑
+# ─────────────────────────────────────────────
+
+def _determine_state(
+    score:     float,
+    direction: str,
+    structure: StructureState,
+    row:       pd.Series,
+    vol_oi:    VolOIResult,
+    density:   "DensityResult",
+) -> str:
+    """
+    五维联合判断市场状态。
+    优先级：K线密度 > 价格结构 > 量价持仓 > 技术指标 > 综合评分
+
+    密度规则（最高优先级）：
+      密度 >= 75 → 强制观望（拥挤行情不操作）
+      密度 65-75 → 最高只允许轻仓（不允许趋势仓位）
+    """
+    # ── 密度过滤（最优先）──
+    if density.score >= 75:
+        return MarketState.OBSERVE
+    downgrade = density.score >= 65   # 高密度时不允许趋势级别仓位
+
+    sub   = structure.sub_state
+    trend = structure.trend
+    dif   = row.get("DIF", 0)
+    dea   = row.get("DEA", 0)
+    adx   = row.get("ADX", 0)
+    rsi   = row.get("RSI", 50)
+    vs    = vol_oi.combined_signal
+    vc    = vol_oi.combined_score
+
+    # ── 突破状态优先 ──
+    if sub == "BREAKOUT_UP" and (vs in ("strong_bull", "bull")):
+        raw = MarketState.TREND_LONG if score >= 55 else MarketState.LIGHT_LONG
+        return MarketState.LIGHT_LONG if (downgrade and raw == MarketState.TREND_LONG) else raw
+    if sub == "BREAKOUT_DN" and (vs in ("strong_bear", "bear")):
+        raw = MarketState.TREND_SHORT if score >= 55 else MarketState.LIGHT_SHORT
+        return MarketState.LIGHT_SHORT if (downgrade and raw == MarketState.TREND_SHORT) else raw
+
+    # ── 趋势+回踩=做多机会 ──
+    if sub == "PULLBACK_UP" and trend == "UPTREND":
+        if dif > dea and vs in ("strong_bull", "bull", "neutral"):
+            return MarketState.LIGHT_LONG
+        if dif > dea and vs == "strong_bull" and not downgrade:
+            return MarketState.TREND_LONG
+
+    # ── 趋势+反弹=做空机会 ──
+    if sub == "PULLBACK_DN" and trend == "DOWNTREND":
+        if dif < dea and vs in ("strong_bear", "bear", "neutral"):
+            return MarketState.LIGHT_SHORT
+        if dif < dea and vs == "strong_bear" and not downgrade:
+            return MarketState.TREND_SHORT
+
+    # ── 强趋势（ADX + 量价持仓同向）──
+    if score >= STATE_THRESHOLDS["trend_long"] and not downgrade:
+        if direction == "多" and adx > 25 and dif > dea and vs in ("strong_bull", "bull"):
+            return MarketState.TREND_LONG
+        if direction == "空" and adx > 25 and dif < dea and vs in ("strong_bear", "bear"):
+            return MarketState.TREND_SHORT
+
+    # ── 中等信号 → 轻仓 ──
+    if score >= STATE_THRESHOLDS["light_trade"]:
+        if direction == "多" and dif > dea:
+            return MarketState.LIGHT_LONG
+        if direction == "空" and dif < dea:
+            return MarketState.LIGHT_SHORT
+
+    # ── RSI 极值 ──
+    if rsi < 30 and trend != "DOWNTREND":
+        return MarketState.LIGHT_LONG
+    if rsi > 70 and trend != "UPTREND":
+        return MarketState.LIGHT_SHORT
+
+    return MarketState.OBSERVE
+
+
+# ─────────────────────────────────────────────
+#  主分析接口
+# ─────────────────────────────────────────────
 
 def analyze_symbol(
-    symbol: str,
-    df: pd.DataFrame,
-    score: float,
+    symbol:    str,
+    df:        pd.DataFrame,
+    score:     float,
     direction: str,
 ) -> AnalysisResult:
-    """
-    根据综合评分 + 方向 + 指标细节，判断市场状态。
+    """四维分析单个品种，返回完整 AnalysisResult。"""
+    from config import ALL_SYMBOLS
+    name = ALL_SYMBOLS.get(symbol, symbol)
 
-    Parameters
-    ----------
-    symbol    : 品种代码
-    df        : 包含技术指标的 DataFrame
-    score     : variety_selector 给出的综合分（0-100）
-    direction : "多" 或 "空"
-    """
     df_ind = add_all_indicators(df)
     row    = get_latest_row(df_ind)
 
     close = float(row["close"])
     atr   = float(row.get("ATR", close * 0.015))
     rsi   = float(row.get("RSI", 50))
+    adx   = float(row.get("ADX", 0))
     dif   = float(row.get("DIF", 0))
     dea   = float(row.get("DEA", 0))
-    adx   = float(row.get("ADX", 0))
-    ma5   = float(row.get("MA5", close))
-    ma20  = float(row.get("MA20", close))
+    macd_signal = "金叉" if dif > dea else "死叉"
 
-    # ── 布林带突破检测 ──
-    bb_upper = float(row.get("BB_UPPER", close * 1.02))
-    bb_lower = float(row.get("BB_LOWER", close * 0.98))
-    bb_break_up   = close > bb_upper
-    bb_break_down = close < bb_lower
+    structure = analyze_structure(df_ind)
+    vol_oi    = analyze_vol_oi(df_ind)
+    density   = analyze_density(df_ind)
+    state     = _determine_state(score, direction, structure, row, vol_oi, density)
 
-    # ── 成交量放大检测 ──
-    vol    = float(row.get("volume", 0))
-    volma5 = float(row.get("VOL_MA5", vol))
-    vol_surge = (volma5 > 0) and (vol > volma5 * 1.2)
-
-    # ── 状态判断逻辑 ──
-    if score >= STATE_THRESHOLDS["trend_long"] and direction == "多":
-        # 强趋势做多：均线多头 + ADX 强 + MACD 金叉 + 量放大
-        if adx > 25 and dif > dea and vol_surge:
-            state = MarketState.TREND_LONG
-        else:
-            state = MarketState.LIGHT_LONG
-
-    elif score >= STATE_THRESHOLDS["trend_short"] and direction == "空":
-        if adx > 25 and dif < dea and vol_surge:
-            state = MarketState.TREND_SHORT
-        else:
-            state = MarketState.LIGHT_SHORT
-
-    elif score >= STATE_THRESHOLDS["light_trade"]:
-        # 中等评分：根据方向选轻仓
-        if direction == "多" and dif > dea:
-            state = MarketState.LIGHT_LONG
-        elif direction == "空" and dif < dea:
-            state = MarketState.LIGHT_SHORT
-        else:
-            state = MarketState.OBSERVE
-
-    else:
-        # 低分 → 观望
-        # 特例：RSI 超卖/超买时布林突破给短线机会
-        if bb_break_up and rsi < 70 and direction == "多":
-            state = MarketState.LIGHT_LONG
-        elif bb_break_down and rsi > 30 and direction == "空":
-            state = MarketState.LIGHT_SHORT
-        else:
-            state = MarketState.OBSERVE
-
-    # ── 止损止盈 ──
-    from config import RISK_PARAMS
-    sl_mult = RISK_PARAMS["atr_stop_mult"]
-    tp_mult = RISK_PARAMS["atr_target_mult"]
-
+    sl = RISK_PARAMS["atr_stop_mult"]
+    tp = RISK_PARAMS["atr_target_mult"]
     if "多" in state:
-        stop_loss = close - sl_mult * atr
-        target    = close + tp_mult * atr
+        stop   = min(close - sl * atr, structure.support - 0.5 * atr)
+        target = close + tp * atr
     elif "空" in state:
-        stop_loss = close + sl_mult * atr
-        target    = close - tp_mult * atr
+        stop   = max(close + sl * atr, structure.resistance + 0.5 * atr)
+        target = close - tp * atr
     else:
-        stop_loss = close - sl_mult * atr
-        target    = close + tp_mult * atr
+        stop   = close - sl * atr
+        target = close + tp * atr
 
-    reason = _build_reason(row, state)
+    desc = _build_full_description(
+        name, state, structure, row, vol_oi, density,
+        entry=close, stop=round(stop, 1), target=round(target, 1),
+    )
 
     return AnalysisResult(
-        symbol    = symbol,
-        state     = state,
-        score     = score,
-        direction = direction,
-        reason    = reason,
-        stop_loss = round(stop_loss, 1),
-        target    = round(target, 1),
-        entry     = round(close, 1),
-        atr       = round(atr, 1),
+        symbol=symbol, name=name, state=state, score=score,
+        structure=structure, direction=direction,
+        rsi=round(rsi, 1), adx=round(adx, 1), macd_signal=macd_signal,
+        vol_oi=vol_oi, density=density,
+        entry=round(close, 1), stop_loss=round(stop, 1),
+        target=round(target, 1), atr=round(atr, 1),
+        full_description=desc,
     )
 
 
 def analyze_all(
-    all_data: dict[str, pd.DataFrame],
+    all_data: "dict[str, pd.DataFrame]",
     rank_df:  pd.DataFrame,
-) -> list[AnalysisResult]:
-    """
-    分析所有品种状态，返回 AnalysisResult 列表（按评分降序）。
-    """
-    results = []
+) -> "list[AnalysisResult]":
+    """分析所有品种，返回按评分降序的列表。"""
+    import logging
+    logger = logging.getLogger(__name__)
+
     score_map = dict(zip(rank_df["symbol"], rank_df["score"]))
     dir_map   = dict(zip(rank_df["symbol"], rank_df["direction"]))
+    results   = []
 
-    for symbol, df in all_data.items():
+    for sym, df in all_data.items():
         if len(df) < 60:
             continue
-        score = score_map.get(symbol, 0)
-        direction = dir_map.get(symbol, "多")
         try:
-            result = analyze_symbol(symbol, df, score, direction)
-            results.append(result)
+            r = analyze_symbol(sym, df, score_map.get(sym, 0), dir_map.get(sym, "多"))
+            results.append(r)
         except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning(f"分析 {symbol} 异常: {e}")
+            logger.warning(f"分析 {sym} 异常: {e}")
 
     results.sort(key=lambda r: r.score, reverse=True)
     return results
 
 
-def results_to_dataframe(results: list[AnalysisResult]) -> pd.DataFrame:
-    """将 AnalysisResult 列表转为 DataFrame，便于展示。"""
-    from config import ALL_SYMBOLS, SYMBOL_SECTOR
+def results_to_dataframe(results: "list[AnalysisResult]") -> pd.DataFrame:
+    """转为简洁 DataFrame（用于仪表板表格）。"""
     rows = []
     for r in results:
         rows.append({
-            "品种": f"{ALL_SYMBOLS.get(r.symbol, r.symbol)}({r.symbol})",
-            "板块": SYMBOL_SECTOR.get(r.symbol, ""),
+            "品种":     f"{r.name}({r.symbol})",
+            "板块":     __import__("config").SYMBOL_SECTOR.get(r.symbol, ""),
             "综合评分": r.score,
             "市场状态": r.state,
+            "K线密度":  f"{r.density.score:.0f} {r.density.label}",
+            "价格结构": r.structure.trend + "/" + r.structure.sub_state,
+            "量能":     r.vol_oi.vol_state.label,
+            "持仓信号": r.vol_oi.oi_state.label,
             "参考入场": r.entry,
-            "参考止损": r.stop_loss,
-            "参考止盈": r.target,
+            "止损":     r.stop_loss,
+            "止盈":     r.target,
             "ATR":      r.atr,
-            "判断依据": r.reason,
         })
     return pd.DataFrame(rows)
+
+
+def get_detail_text(result: AnalysisResult) -> str:
+    """返回单品种完整分析文本（用于仪表板详情面板）。"""
+    return (
+        f"━━ {result.name}({result.symbol}) 综合分析 ━━\n"
+        f"综合评分：{result.score:.1f} / 100\n"
+        f"当前状态：{result.state}\n\n"
+        + result.full_description
+    )
