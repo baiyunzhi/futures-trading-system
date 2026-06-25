@@ -69,6 +69,27 @@ RISK_PARAMS = {
     "atr_target_mult":    3.0,       # 止盈 = 入场价 ± N×ATR
     "commission_rate":    0.0001,    # 手续费率（单边万分之一）
     "slippage_ticks":     1,         # 滑点（跳数）
+    "default_tick_size":   1.0,       # 默认最小变动价位
+    "default_lot_value":   1.0,       # 默认合约乘数（元/点/手）
+}
+
+# ---------- 合约参数 ----------
+# 仅用于回测风控估算；缺失品种回落到 RISK_PARAMS 默认值。
+CONTRACT_SPECS = {
+    "RB0": {"lot_value": 10, "tick_size": 1},
+    "HC0": {"lot_value": 10, "tick_size": 1},
+    "I0":  {"lot_value": 100, "tick_size": 0.5},
+    "J0":  {"lot_value": 100, "tick_size": 0.5},
+    "JM0": {"lot_value": 60, "tick_size": 0.5},
+    "CU0": {"lot_value": 5, "tick_size": 10},
+    "AL0": {"lot_value": 5, "tick_size": 5},
+    "ZN0": {"lot_value": 5, "tick_size": 5},
+    "NI0": {"lot_value": 1, "tick_size": 10},
+    "M0":  {"lot_value": 10, "tick_size": 1},
+    "Y0":  {"lot_value": 10, "tick_size": 2},
+    "C0":  {"lot_value": 10, "tick_size": 1},
+    "SR0": {"lot_value": 10, "tick_size": 1},
+    "CF0": {"lot_value": 5, "tick_size": 5},
 }
 
 # ---------- 数据设置 ----------

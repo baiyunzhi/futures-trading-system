@@ -5,6 +5,7 @@
 # ============================================================
 
 import logging
+import pandas as pd
 import sys
 
 logging.basicConfig(
@@ -60,18 +61,51 @@ def main():
         logger.info(f"    {ALL_SYMBOLS.get(r.symbol, r.symbol):6s}  {r.state}  "
                     f"评分={r.score:.1f}  入场={r.entry}  止损={r.stop_loss}  止盈={r.target}")
 
-    # ── 5. 模拟回测 ──
-    logger.info("Step 5/5  模拟回测（历史验证）...")
+    # ── 5. 多策略回测 ──
+    logger.info("Step 5/5  多策略回测（两套策略对比）...")
     from backtester import backtest_portfolio
-    portfolio_result = backtest_portfolio(all_data_ind, symbols=list(all_data_ind.keys()))
+    import strategy_trend as st_trend
+    import strategy_breakout as st_bo
+    import strategy_range as st_range
 
-    summary = portfolio_result.get("summary", None)
-    if summary is not None and not summary.empty:
-        logger.info("  回测汇总（Top 5 收益）：")
-        top_res = summary.head(5)
-        for _, row in top_res.iterrows():
+    syms = list(all_data_ind.keys())
+    bt_trend = backtest_portfolio(all_data_ind, symbols=syms,
+                                  strategy_fn=st_trend.generate_signals,
+                                  strategy_name="趋势跟踪")
+    bt_bo    = backtest_portfolio(all_data_ind, symbols=syms,
+                                  strategy_fn=st_bo.generate_signals,
+                                  strategy_name="突破追涨")
+    bt_range = backtest_portfolio(all_data_ind, symbols=syms,
+                                  strategy_fn=st_range.generate_signals,
+                                  strategy_name="区间高抛低吸")
+    # 兼容 dashboard：portfolio_result 保留"默认"结果（趋势跟踪）
+    portfolio_result = bt_trend
+
+    def _log_summary(name, res):
+        s = res.get("summary")
+        if s is None or s.empty:
+            logger.info(f"  [{name}] 无回测结果")
+            return
+        logger.info(f"  [{name}] Top 5 收益：")
+        for _, row in s.head(5).iterrows():
             logger.info(f"    {row['品种']:8s}  收益={row['总收益%']:+.1f}%  "
-                        f"胜率={row['胜率%']:.0f}%  夏普={row['夏普比']:.2f}")
+                        f"胜率={row['胜率%']:.0f}%  夏普={row['夏普比']:.2f}  "
+                        f"笔数={row['交易次数']}")
+
+    _log_summary("趋势跟踪", bt_trend)
+    _log_summary("突破追涨", bt_bo)
+    _log_summary("区间高抛低吸", bt_range)
+
+    # 合并对比
+    s1 = bt_trend.get("summary", pd.DataFrame()).add_suffix("_趋势")
+    s2 = bt_bo.get("summary",    pd.DataFrame()).add_suffix("_突破")
+    if not s1.empty and not s2.empty:
+        merged = s1.rename(columns={"品种_趋势": "品种", "代码_趋势": "代码"}).merge(
+                 s2.rename(columns={"品种_突破": "品种", "代码_突破": "代码"}),
+                 on=["品种","代码"], how="outer").fillna(0)
+        logger.info("  ── 两套策略对比（按趋势策略收益排序）──")
+        for _, row in merged.sort_values("总收益%_趋势", ascending=False).head(8).iterrows():
+            logger.info(f"    {row['品种']:8s}  趋势={row['总收益%_趋势']:+.1f}%  突破={row['总收益%_突破']:+.1f}%")
 
     # ── 启动仪表板 ──
     logger.info("")
@@ -82,10 +116,12 @@ def main():
 
     from dashboard import create_app
     app = create_app(
-        all_results = analysis_results,
-        rank_df     = rank_df,
-        bt_results  = portfolio_result.get("results", {}),
-        all_data    = all_data_ind,
+        all_results      = analysis_results,
+        rank_df          = rank_df,
+        bt_results       = portfolio_result.get("results", {}),
+        bt_results_bo    = bt_bo.get("results", {}),
+        bt_results_range = bt_range.get("results", {}),
+        all_data         = all_data_ind,
     )
     app.run(debug=False, host="127.0.0.1", port=8050)
 

@@ -22,7 +22,6 @@
 ```bash
 # 1. 安装依赖
 pip install -r requirements.txt
-pip install pyarrow      # parquet 缓存引擎
 
 # 2. 启动
 python main.py
@@ -31,16 +30,44 @@ python main.py
 http://127.0.0.1:8050
 ```
 
+## 生成静态网页版
+
+```bash
+python export_static.py
+```
+
+生成文件：`docs/index.html`
+
+GitHub Pages 可直接选择 `main` 分支的 `/docs` 目录发布。
+
 ## 数据说明
 
 - 优先通过 **akshare** 获取真实行情（`futures_zh_daily_sina`）。
 - 当网络不可用或数据不足 60 条时，自动回退到**仿真数据**（带趋势 + 周期 + 噪声），
   保证系统在离线环境下也能完整跑通演示。
-- 数据缓存为 parquet 格式，缓存有效期见 `config.py` 中 `DATA_PARAMS["cache_hours"]`。
+- 数据缓存为 CSV 格式，缓存有效期见 `config.py` 中 `DATA_PARAMS["cache_hours"]`。
+
+## 已修复的关键漏洞
+
+- 回测成交从“信号日收盘价成交”改为“下一根 K 线开盘价成交”，避免不可成交价格和前视偏差。
+- 回测加入滑点、合约乘数、ATR 风险手数，避免固定 1 手导致风险失真。
+- 止损止盈改为检查日内 high/low，避免只看收盘价漏掉硬止损。
+- 交易 PnL 计入开平双边手续费，净值曲线加入持仓浮盈浮亏。
+- 最后一根 K 线仍有持仓时强制平仓，避免绩效遗漏未平仓风险。
+- 静态页面导出不再强依赖 Dash，可用于 GitHub Pages。
+
+## 剩余风险
+
+- akshare 数据接口和主力连续合约规则可能变化，实盘前必须校验复权、换月和缺失数据。
+- 当前策略基于日线，不适合作为自动下单系统直接实盘。
+- 若同一日同时触发止损和止盈，回测按保守顺序优先止损。
+- 仿真数据仅用于离线演示，不能用于策略有效性结论。
+
+详见 `docs/AUDIT.md`。
 
 ## 依赖
 
-akshare · pandas · numpy · plotly · dash · dash-bootstrap-components · pyarrow
+akshare · pandas · numpy · plotly · dash · dash-bootstrap-components · requests
 
 ## 免责声明
 

@@ -24,24 +24,71 @@ CACHE_DIR.mkdir(exist_ok=True)
 #  akshare 获取
 # ─────────────────────────────────────────────
 
+# akshare 可能返回的列名映射（兼容多版本）
+_COL_MAP = {
+    # 中文列名（老版本）
+    "日期":  "date", "开盘价": "open",  "最高价": "high",
+    "最低价": "low",  "收盘价": "close", "成交量": "volume",
+    "持仓量": "open_interest",
+    # 英文列名（新版本）
+    "date":  "date", "open":  "open",  "high":  "high",
+    "low":   "low",  "close": "close", "volume": "volume",
+    "open_interest": "open_interest",
+    # sina 格式
+    "settle": "settle", "pre_settle": "pre_settle",
+}
+
+
 def _fetch_from_akshare(symbol: str) -> pd.DataFrame | None:
-    """尝试通过 akshare 获取期货主力合约日线数据。"""
+    """尝试通过 akshare 获取期货主力合约日线数据（兼容多版本列名）。"""
     try:
         import akshare as ak
-        df = ak.futures_zh_daily_sina(symbol=symbol)
+
+        # 尝试多个接口，按优先级排列
+        df = None
+        errors = []
+
+        for fn_name, kwargs in [
+            ("futures_zh_daily_sina",    {"symbol": symbol}),
+            ("futures_main_sina",        {"symbol": symbol}),
+            ("futures_zh_spot",          {"symbol": symbol, "market": "CF"}),
+        ]:
+            try:
+                fn = getattr(ak, fn_name, None)
+                if fn is None:
+                    continue
+                df = fn(**kwargs)
+                if df is not None and not df.empty:
+                    logger.debug(f"[akshare] {symbol} 使用接口 {fn_name}")
+                    break
+                df = None
+            except Exception as e:
+                errors.append(f"{fn_name}: {e}")
+                df = None
+
         if df is None or df.empty:
+            logger.warning(f"akshare 获取 {symbol} 失败: {'; '.join(errors)}")
             return None
 
-        # 统一列名
-        df = df.rename(columns={
-            "日期": "date", "date": "date",
-            "开盘价": "open",  "open": "open",
-            "最高价": "high",  "high": "high",
-            "最低价": "low",   "low": "low",
-            "收盘价": "close", "close": "close",
-            "成交量": "volume","volume": "volume",
-            "持仓量": "open_interest",
-        })
+        # 统一列名（自动映射，容错大小写）
+        rename = {}
+        for col in df.columns:
+            mapped = _COL_MAP.get(col) or _COL_MAP.get(col.lower())
+            if mapped:
+                rename[col] = mapped
+        df = df.rename(columns=rename)
+
+        # 确保 date 列存在
+        if "date" not in df.columns:
+            for c in df.columns:
+                if "date" in c.lower() or "时间" in c or "日期" in c:
+                    df = df.rename(columns={c: "date"})
+                    break
+
+        if "date" not in df.columns:
+            logger.warning(f"akshare {symbol} 无法识别日期列，列名: {list(df.columns)}")
+            return None
+
         df["date"] = pd.to_datetime(df["date"])
         df = df.sort_values("date").reset_index(drop=True)
 
@@ -50,7 +97,12 @@ def _fetch_from_akshare(symbol: str) -> pd.DataFrame | None:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
 
         df = df.dropna(subset=["close"])
-        return df[["date", "open", "high", "low", "close", "volume"]]
+
+        # 保留可用列
+        keep = ["date", "open", "high", "low", "close", "volume"]
+        if "open_interest" in df.columns:
+            keep.append("open_interest")
+        return df[[c for c in keep if c in df.columns]]
 
     except Exception as e:
         logger.warning(f"akshare 获取 {symbol} 失败: {e}")

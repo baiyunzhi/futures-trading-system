@@ -8,9 +8,12 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
-import dash
-from dash import dcc, html, Input, Output, dash_table
-import dash_bootstrap_components as dbc
+try:
+    import dash
+    from dash import dcc, html, Input, Output, dash_table
+    import dash_bootstrap_components as dbc
+except ModuleNotFoundError:
+    dash = dcc = html = Input = Output = dash_table = dbc = None
 
 from config import ALL_SYMBOLS, SYMBOL_SECTOR
 from market_analyzer import AnalysisResult, get_detail_text, results_to_dataframe
@@ -195,12 +198,63 @@ def build_equity_chart(bt_results: dict) -> go.Figure:
 #  Dash App 组装
 # ─────────────────────────────────────────────
 
+def _build_strategy_compare(bt_trend: dict, bt_bo: dict, bt_range: dict = {}) -> go.Figure:
+    """并排柱状图对比三套策略的品种收益率。"""
+    from config import ALL_SYMBOLS
+
+    def _extract(bt):
+        rows = {}
+        for sym, res in bt.items():
+            m = res.metrics if hasattr(res, "metrics") else (res if isinstance(res, dict) else {})
+            rows[sym] = {
+                "ret":    m.get("total_return", 0),
+                "wr":     m.get("win_rate", 0),
+                "sharpe": m.get("sharpe", 0),
+                "trades": m.get("total_trades", 0),
+            }
+        return rows
+
+    d1 = _extract(bt_trend)
+    d2 = _extract(bt_bo)
+    d3 = _extract(bt_range)
+    syms  = sorted(set(list(d1.keys()) + list(d2.keys()) + list(d3.keys())))
+    names = [ALL_SYMBOLS.get(s, s) for s in syms]
+
+    def _rets(d): return [d.get(s, {}).get("ret", 0) for s in syms]
+    def _text(vals): return [f"{v:+.1f}%" for v in vals]
+
+    r1, r2, r3 = _rets(d1), _rets(d2), _rets(d3)
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(name="趋势跟踪", x=names, y=r1, marker_color="#26a69a",
+                         text=_text(r1), textposition="outside"))
+    fig.add_trace(go.Bar(name="突破追涨", x=names, y=r2, marker_color="#FFD700",
+                         text=_text(r2), textposition="outside"))
+    if any(v != 0 for v in r3):
+        fig.add_trace(go.Bar(name="区间高抛低吸", x=names, y=r3, marker_color="#9370DB",
+                             text=_text(r3), textposition="outside"))
+    fig.add_hline(y=0, line_color="#555", line_dash="dash")
+    fig.update_layout(
+        template="plotly_dark", paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
+        height=320, barmode="group",
+        margin=dict(l=20, r=20, t=10, b=60),
+        legend=dict(orientation="h", y=1.05, x=1, xanchor="right"),
+        yaxis=dict(title="总收益%", ticksuffix="%"),
+    )
+    return fig
+
+
+
 def create_app(
-    all_results: list[AnalysisResult],
-    rank_df:     pd.DataFrame,
-    bt_results:  dict,
-    all_data:    dict[str, pd.DataFrame],
+    all_results:   list[AnalysisResult],
+    rank_df:       pd.DataFrame,
+    bt_results:    dict,
+    all_data:      dict[str, pd.DataFrame],
+    bt_results_bo:    dict | None = None,   # 突破策略回测结果（可选）
+    bt_results_range: dict | None = None,   # 区间策略回测结果（可选）
 ) -> dash.Dash:
+    if dash is None or dbc is None:
+        raise RuntimeError("缺少 Dash 依赖，请先运行: pip install -r requirements.txt")
 
     app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY],
                     title="商品期货交易系统")
@@ -336,6 +390,18 @@ def create_app(
                                       "color": "#aaa", "border": "1px solid #333"},
                         style_data_conditional=TABLE_COND,
                     ),
+                ], style=CARD),
+            ], width=12),
+        ], className="mb-3"),
+
+        # ── 策略对比面板 ──
+        dbc.Row([
+            dbc.Col([
+                dbc.Card([
+                    html.H6("两套策略回测对比", style={"color": "#26a69a", "marginBottom": "8px"}),
+                    dcc.Graph(id="strategy-compare-chart",
+                              figure=_build_strategy_compare(bt_results, bt_results_bo or {}, bt_results_range or {}),
+                              config={"displayModeBar": False}),
                 ], style=CARD),
             ], width=12),
         ], className="mb-3"),

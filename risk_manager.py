@@ -4,7 +4,6 @@
 # ============================================================
 
 from __future__ import annotations
-import numpy as np
 from config import RISK_PARAMS
 
 
@@ -33,7 +32,7 @@ class RiskManager:
         self,
         price:       float,
         atr:         float,
-        lot_value:   float = 1.0,   # 每手价值（元/点）
+        lot_value:   float = RISK_PARAMS["default_lot_value"],
     ) -> int:
         """
         计算合理开仓手数。
@@ -42,10 +41,10 @@ class RiskManager:
         """
         risk_amount = self.capital * self.max_risk
         atr_risk    = atr * self.sl_mult * lot_value
-        if atr_risk <= 0:
-            return 1
+        if atr_risk <= 0 or price <= 0:
+            return 0
         lots = int(risk_amount / atr_risk)
-        return max(1, lots)
+        return max(0, lots)
 
     # ── 仓位校验 ──────────────────────────────
 
@@ -63,19 +62,29 @@ class RiskManager:
         direction:  str,   # "LONG" / "SHORT"
         price:      float,
         atr:        float,
-        lots:       int   = 1,
-        lot_value:  float = 1.0,
+        lots:       int | None = None,
+        lot_value:  float = RISK_PARAMS["default_lot_value"],
+        stop_loss:  float | None = None,
+        target:     float | None = None,
     ) -> dict:
         """记录开仓，返回仓位信息。"""
+        if price <= 0 or atr <= 0:
+            return {}
+
+        if lots is None:
+            lots = self.calc_lots(price, atr, lot_value)
+        if lots <= 0:
+            return {}
+
         sl_dist = atr * self.sl_mult
         tp_dist = atr * self.tp_mult
 
         if direction == "LONG":
-            stop_loss = price - sl_dist
-            target    = price + tp_dist
+            stop_loss = price - sl_dist if stop_loss is None else stop_loss
+            target    = price + tp_dist if target is None else target
         else:
-            stop_loss = price + sl_dist
-            target    = price - tp_dist
+            stop_loss = price + sl_dist if stop_loss is None else stop_loss
+            target    = price - tp_dist if target is None else target
 
         # 手续费
         commission = price * lots * lot_value * self.commission_rate
@@ -118,8 +127,9 @@ class RiskManager:
             pnl = (entry - price) * lots * lot_value
 
         commission = price * lots * lot_value * self.commission_rate
-        net_pnl    = pnl - commission
-        self.capital += net_pnl
+        entry_commission = pos["commission"]
+        net_pnl = pnl - entry_commission - commission
+        self.capital += pnl - commission
 
         return {
             "symbol":    symbol,
@@ -128,7 +138,7 @@ class RiskManager:
             "exit":      price,
             "lots":      lots,
             "pnl":       round(pnl, 2),
-            "commission": round(commission + pos["commission"], 2),
+            "commission": round(commission + entry_commission, 2),
             "net_pnl":   round(net_pnl, 2),
             "return_pct": round(net_pnl / self.initial_capital * 100, 3),
         }
