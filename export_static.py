@@ -37,7 +37,7 @@ def build():
     from data_fetcher import get_all_data
     from indicators import add_all_indicators
     from variety_selector import rank_symbols
-    from market_analyzer import analyze_all, results_to_dataframe
+    from market_analyzer import analyze_all, results_to_dataframe, get_detail_text
     from backtester import backtest_portfolio
     from dashboard import build_score_heatmap, build_kline_chart, build_equity_chart
 
@@ -61,13 +61,24 @@ def build():
     parts.append(_fig_html(build_score_heatmap(rank_df), "heatmap", include_js=True))
     parts.append(_fig_html(build_equity_chart(portfolio_result.get("results", {})), "equity", include_js=False))
 
-    # 每个品种的K线图预渲染，用 JS 下拉切换显示
+    # 每个品种的K线图 + 行情深度分析文字，预渲染，用 JS 下拉切换显示
+    import html as _htmlmod
     kline_divs = []
+    detail_divs = []
     symbols = list(all_data_ind.keys())
     for i, sym in enumerate(symbols):
         div = _fig_html(build_kline_chart(all_data_ind[sym], sym, result_map.get(sym)), f"kline-{sym}", include_js=False)
         display = "block" if i == 0 else "none"
         kline_divs.append(f'<div class="kbox" id="box-{sym}" style="display:{display}">{div}</div>')
+
+        # 行情深度分析文字（与 Dash 回调一致，预生成后嵌入静态页）
+        try:
+            detail_text = get_detail_text(result_map.get(sym)) if result_map.get(sym) else "暂无分析"
+        except Exception as e:
+            detail_text = f"分析生成失败: {e}"
+        detail_divs.append(
+            f'<pre class="dbox" id="detail-{sym}" style="display:{display}">{_htmlmod.escape(detail_text)}</pre>'
+        )
 
     options = "\n".join(
         f'<option value="{s}">{ALL_SYMBOLS.get(s, s)} ({s})</option>' for s in symbols
@@ -98,6 +109,7 @@ def build():
         heatmap=parts[0],
         equity=parts[1],
         kline_boxes="\n".join(kline_divs),
+        detail_boxes="\n".join(detail_divs),
         options=options,
         summary_table=summary_table,
         state_table=state_table,
@@ -129,6 +141,10 @@ TEMPLATE = """<!DOCTYPE html>
   table.tbl th{{background:#0e1117;color:#aaa;padding:6px 8px;border:1px solid #2a2a3e;text-align:center}}
   table.tbl td{{padding:5px 8px;border:1px solid #2a2a3e;text-align:center;color:#ddd}}
   footer{{color:#555;font-size:12px;text-align:center;padding:20px}}
+  .kline-row{{display:flex;gap:16px;flex-wrap:wrap}}
+  .kline-col{{flex:1;min-width:480px}}
+  .detail-col{{width:340px;min-width:300px;background:#0e1117;border:1px solid #2a2a3e;border-radius:6px;padding:12px}}
+  .dbox{{color:#ccc;font-size:12px;white-space:pre-wrap;word-break:break-word;max-height:680px;overflow-y:auto;margin:0;font-family:'Consolas','SF Mono',monospace;line-height:1.6}}
 </style>
 </head>
 <body>
@@ -141,14 +157,20 @@ TEMPLATE = """<!DOCTYPE html>
   </div>
 
   <div class="card">
-    <h2>K 线分析（可切换品种）</h2>
+    <h2>K 线分析 + 行情深度分析（可切换品种）</h2>
     <div style="margin-bottom:10px">
       <label style="color:#aaa;margin-right:8px">选择品种：</label>
       <select id="symSelect" onchange="switchSym(this.value)">
         {options}
       </select>
     </div>
-    {kline_boxes}
+    <div class="kline-row">
+      <div class="kline-col">{kline_boxes}</div>
+      <div class="detail-col">
+        <h3 style="color:#26a69a;font-size:14px;margin:0 0 8px">📈 行情深度分析</h3>
+        {detail_boxes}
+      </div>
+    </div>
   </div>
 
   <div class="card">
@@ -172,8 +194,11 @@ TEMPLATE = """<!DOCTYPE html>
 <script>
 function switchSym(sym){{
   document.querySelectorAll('.kbox').forEach(function(b){{b.style.display='none';}});
+  document.querySelectorAll('.dbox').forEach(function(b){{b.style.display='none';}});
   var box=document.getElementById('box-'+sym);
   if(box){{box.style.display='block'; window.dispatchEvent(new Event('resize'));}}
+  var det=document.getElementById('detail-'+sym);
+  if(det){{det.style.display='block';}}
 }}
 </script>
 </body>
