@@ -124,30 +124,38 @@ def _run_strategy(name: str, fn, symbol: str, df: pd.DataFrame) -> dict:
         }
 
     # 配对计算盈亏
+    # 修复：按时间顺序遍历用状态机一开一平配对。
+    # 原 zip(entries, exits) 在出现悬空开仓（最后未平仓）时会整体错位，导致盈亏算错。
     trades = []
-    paired = list(zip(entries, exits)) if len(exits) >= len(entries) else list(zip(entries, exits))
-    for ent, ext in paired:
-        if ent.action == "BUY":
-            pnl_pct = (ext.price - ent.price) / ent.price * 100
-            direction = "多"
-        else:
-            pnl_pct = (ent.price - ext.price) / ent.price * 100
-            direction = "空"
-        days_held = (ext.date - ent.date).days if hasattr(ext.date - ent.date, "days") else 0
-        trades.append({
-            "entry_date":  ent.date.date() if hasattr(ent.date, "date") else ent.date,
-            "exit_date":   ext.date.date() if hasattr(ext.date, "date") else ext.date,
-            "direction":   direction,
-            "entry_price": ent.price,
-            "stop_loss":   ent.stop_loss,
-            "target":      ent.target,
-            "exit_price":  ext.price,
-            "pnl_pct":     round(pnl_pct, 2),
-            "days_held":   days_held,
-            "win":         pnl_pct > 0,
-            "entry_reason": ent.reason,
-            "exit_reason":  ext.reason,
-        })
+    open_sig = None   # 当前持有的开仓信号；None 表示空仓
+    for s in signals:
+        if s.action in ("BUY", "SHORT"):
+            if open_sig is None:
+                open_sig = s
+        elif s.action in ("SELL", "COVER") and open_sig is not None:
+            ent, ext = open_sig, s
+            if ent.action == "BUY":
+                pnl_pct = (ext.price - ent.price) / ent.price * 100
+                direction = "多"
+            else:
+                pnl_pct = (ent.price - ext.price) / ent.price * 100
+                direction = "空"
+            days_held = (ext.date - ent.date).days if hasattr(ext.date - ent.date, "days") else 0
+            trades.append({
+                "entry_date":  ent.date.date() if hasattr(ent.date, "date") else ent.date,
+                "exit_date":   ext.date.date() if hasattr(ext.date, "date") else ext.date,
+                "direction":   direction,
+                "entry_price": ent.price,
+                "stop_loss":   ent.stop_loss,
+                "target":      ent.target,
+                "exit_price":  ext.price,
+                "pnl_pct":     round(pnl_pct, 2),
+                "days_held":   days_held,
+                "win":         pnl_pct > 0,
+                "entry_reason": ent.reason,
+                "exit_reason":  ext.reason,
+            })
+            open_sig = None
 
     win_trades  = [t for t in trades if t["win"]]
     loss_trades = [t for t in trades if not t["win"]]
