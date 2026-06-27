@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from math import sin
 from pathlib import Path
 
 import pandas as pd
 
 
-TIMEFRAMES = ("周线", "日线", "小时线")
+TIMEFRAMES = ("日线", "周线")
 
 SYMBOLS = {
     "RB0": {"name": "螺纹钢", "multiplier": 10},
@@ -33,52 +31,14 @@ class MarketReport:
 
 
 def load_or_create_data(path: Path) -> pd.DataFrame:
-    if path.exists():
-        return _normalize_data(pd.read_csv(path))
-    df = create_sample_hourly_data()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(path, index=False)
-    return _normalize_data(df)
-
-
-def create_sample_hourly_data() -> pd.DataFrame:
-    rows: list[dict] = []
-    start = datetime(2026, 3, 2, 9)
-    hours = [9, 10, 11, 13, 14]
-    configs = {"RB0": {"base": 3450, "trend": -1.8, "amp": 18, "oi": 820000}}
-
-    for symbol, cfg in configs.items():
-        step = 0
-        for day in range(90):
-            current = start + timedelta(days=day)
-            if current.weekday() >= 5:
-                continue
-            for hour in hours:
-                dt = current.replace(hour=hour)
-                drift = cfg["trend"] * step / len(hours)
-                wave = cfg["amp"] * sin(step / 7)
-                base = cfg["base"] + drift + wave
-                close = base + cfg["amp"] * 0.12 * sin(step / 3)
-                open_ = base - cfg["amp"] * 0.08 * sin(step / 4)
-                high = max(open_, close) + cfg["amp"] * (0.35 + 0.08 * abs(sin(step)))
-                low = min(open_, close) - cfg["amp"] * (0.32 + 0.07 * abs(sin(step / 2)))
-                volume = 50000 + abs(sin(step / 5)) * 70000 + (90000 if step % 37 == 0 else 0)
-                oi = cfg["oi"] + step * (280 if cfg["trend"] > 0 else -180) + 6000 * sin(step / 11)
-                rows.append({
-                    "datetime": dt.isoformat(sep=" "),
-                    "symbol": symbol,
-                    "open": round(open_, 2),
-                    "high": round(high, 2),
-                    "low": round(low, 2),
-                    "close": round(close, 2),
-                    "volume": round(volume, 0),
-                    "open_interest": round(max(1, oi), 0),
-                })
-                step += 1
-    return pd.DataFrame(rows)
+    if not path.exists():
+        raise FileNotFoundError(f"缺少螺纹钢最近两个月数据文件: {path}")
+    return _normalize_data(pd.read_csv(path))
 
 
 def _normalize_data(df: pd.DataFrame) -> pd.DataFrame:
+    if "date" in df.columns and "datetime" not in df.columns:
+        df = df.rename(columns={"date": "datetime"})
     required = ["datetime", "symbol", "open", "high", "low", "close", "volume", "open_interest"]
     missing = [col for col in required if col not in df.columns]
     if missing:
@@ -105,8 +65,7 @@ def build_timeframes(symbol_df: pd.DataFrame) -> dict[str, pd.DataFrame]:
     }
     return {
         "周线": indexed.resample("W-FRI").agg(agg).dropna().reset_index(),
-        "日线": indexed.resample("1D").agg(agg).dropna().reset_index(),
-        "小时线": indexed.reset_index(),
+        "日线": indexed.reset_index(),
     }
 
 
@@ -124,44 +83,96 @@ def combine_view(timeframe: str, frame: pd.DataFrame) -> TimeframeView:
 
 def build_objective_summary(timeframe: str, frame: pd.DataFrame) -> str:
     latest = frame.iloc[-1]
-    prev = frame.iloc[-2] if len(frame) >= 2 else latest
-    tail = frame.tail(12)
+    first = frame.iloc[0]
+    max_volume_row = frame.loc[frame["volume"].idxmax()]
+    structure = describe_price_structure(frame)
+    max_volume_story = describe_max_volume_area(frame, max_volume_row)
+    oi_story = describe_open_interest(frame)
     latest_high = float(latest["high"])
     latest_low = float(latest["low"])
     latest_open = float(latest["open"])
     latest_close = float(latest["close"])
-    period_high_idx = tail["high"].idxmax()
-    period_low_idx = tail["low"].idxmin()
-    period_high_row = tail.loc[period_high_idx]
-    period_low_row = tail.loc[period_low_idx]
-    price_change = latest_close - float(prev["close"])
-    volume_change = float(latest["volume"] - prev["volume"])
-    oi_change = float(latest["open_interest"] - prev["open_interest"])
-    attitude = describe_attitude(price_change, volume_change, oi_change)
+    period_high_row = frame.loc[frame["high"].idxmax()]
+    period_low_row = frame.loc[frame["low"].idxmin()]
+    close_change = latest_close - float(first["close"])
     return (
-        f"{timeframe}独立观察：最新K线时间 {format_dt(latest['datetime'])}，"
-        f"开盘 {latest_open:.2f}，高点 {latest_high:.2f}，低点 {latest_low:.2f}，收盘 {latest_close:.2f}。"
-        f"最近12根K线最高点 {float(period_high_row['high']):.2f}，时间 {format_dt(period_high_row['datetime'])}；"
-        f"最低点 {float(period_low_row['low']):.2f}，时间 {format_dt(period_low_row['datetime'])}。"
-        f"与上一根K线相比，收盘变化 {price_change:+.2f}，成交量变化 {volume_change:+.0f}，"
-        f"持仓量变化 {oi_change:+.0f}。{attitude}"
+        f"{timeframe}独立观察：本页使用 {format_dt(first['datetime'])} 到 {format_dt(latest['datetime'])} 的{timeframe}K线，"
+        f"共 {len(frame)} 根。最新K线开盘 {latest_open:.2f}，高点 {latest_high:.2f}，"
+        f"低点 {latest_low:.2f}，收盘 {latest_close:.2f}。"
+        f"两个月内最高点 {float(period_high_row['high']):.2f}，时间 {format_dt(period_high_row['datetime'])}；"
+        f"最低点 {float(period_low_row['low']):.2f}，时间 {format_dt(period_low_row['datetime'])}；"
+        f"首尾收盘变化 {close_change:+.2f}。"
+        f"{structure}"
+        f"最大成交量K线是 {format_dt(max_volume_row['datetime'])}，成交量 {int(max_volume_row['volume'])}，"
+        f"K线高点 {float(max_volume_row['high']):.2f}，低点 {float(max_volume_row['low']):.2f}，"
+        f"收盘 {float(max_volume_row['close']):.2f}。{max_volume_story}"
+        f"{oi_story}"
     )
 
 
-def describe_attitude(price_change: float, volume_change: float, oi_change: float) -> str:
-    if price_change > 0 and volume_change > 0 and oi_change > 0:
-        return "价格上行，同时成交量和持仓量增加，当前K线显示多方参与增加。"
-    if price_change < 0 and volume_change > 0 and oi_change > 0:
-        return "价格下行，同时成交量和持仓量增加，当前K线显示空方参与增加。"
-    if price_change > 0 and oi_change < 0:
-        return "价格上行但持仓量减少，当前K线显示上涨过程中有持仓退出。"
-    if price_change < 0 and oi_change < 0:
-        return "价格下行且持仓量减少，当前K线显示下跌过程中有持仓退出。"
-    if volume_change > 0:
-        return "成交量增加，当前K线参与度比上一根提高。"
-    if volume_change < 0:
-        return "成交量减少，当前K线参与度比上一根降低。"
-    return "成交量和持仓量较上一根K线没有明显变化。"
+def describe_price_structure(frame: pd.DataFrame) -> str:
+    midpoint = max(1, len(frame) // 2)
+    first_half = frame.iloc[:midpoint]
+    second_half = frame.iloc[midpoint:]
+    first_high = float(first_half["high"].max())
+    first_low = float(first_half["low"].min())
+    second_high = float(second_half["high"].max())
+    second_low = float(second_half["low"].min())
+    if second_high < first_high and second_low < first_low:
+        return (
+            f"高低点结构：前半段高点 {first_high:.2f}、低点 {first_low:.2f}，"
+            f"后半段高点 {second_high:.2f}、低点 {second_low:.2f}，表现为高点下移、低点下移。"
+        )
+    if second_high > first_high and second_low > first_low:
+        return (
+            f"高低点结构：前半段高点 {first_high:.2f}、低点 {first_low:.2f}，"
+            f"后半段高点 {second_high:.2f}、低点 {second_low:.2f}，表现为高点上移、低点上移。"
+        )
+    return (
+        f"高低点结构：前半段高点 {first_high:.2f}、低点 {first_low:.2f}，"
+        f"后半段高点 {second_high:.2f}、低点 {second_low:.2f}，表现为区间震荡。"
+    )
+
+
+def describe_max_volume_area(frame: pd.DataFrame, max_volume_row: pd.Series) -> str:
+    after = frame[frame["datetime"] > max_volume_row["datetime"]]
+    if after.empty:
+        return "最大量能K线位于当前周期最后一根，后续行情尚未展开。"
+    high = float(max_volume_row["high"])
+    low = float(max_volume_row["low"])
+    latest_close = float(frame.iloc[-1]["close"])
+    inside_count = int(((after["close"] <= high) & (after["close"] >= low)).sum())
+    if latest_close > high:
+        location = "最新收盘在最大量能K线高点上方"
+    elif latest_close < low:
+        location = "最新收盘在最大量能K线低点下方"
+    else:
+        location = "最新收盘仍在最大量能K线高低点范围内"
+    return (
+        f"最大量能K线之后共有 {len(after)} 根K线，其中 {inside_count} 根收盘在这根K线高低点范围内，"
+        f"{location}，说明后续行情主要围绕这根最大量能K线的高低点展开。"
+    )
+
+
+def describe_open_interest(frame: pd.DataFrame) -> str:
+    first = frame.iloc[0]
+    latest = frame.iloc[-1]
+    oi_change = float(latest["open_interest"] - first["open_interest"])
+    close_change = float(latest["close"] - first["close"])
+    if close_change < 0 and oi_change > 0:
+        attitude = "价格下行、持仓量增加，空方参与度增加。"
+    elif close_change > 0 and oi_change > 0:
+        attitude = "价格上行、持仓量增加，多方参与度增加。"
+    elif close_change < 0 and oi_change < 0:
+        attitude = "价格下行、持仓量减少，行情下跌过程中有持仓退出。"
+    elif close_change > 0 and oi_change < 0:
+        attitude = "价格上行、持仓量减少，行情上涨过程中有持仓退出。"
+    else:
+        attitude = "价格和持仓量首尾变化不明显。"
+    return (
+        f"持仓量从 {int(first['open_interest'])} 变化到 {int(latest['open_interest'])}，"
+        f"变化 {oi_change:+.0f}；{attitude}"
+    )
 
 
 def format_dt(value: object) -> str:
