@@ -85,6 +85,7 @@ class PaperTradingEngine:
         self.equity_records: list[dict] = []
         self.next_order_id = 1
         self.trading_halted = False
+        self.day_start_equity = float(initial_capital)
 
     def run(
         self,
@@ -114,6 +115,8 @@ class PaperTradingEngine:
         dates = sorted({d for rows in row_map.values() for d in rows})
 
         for date in dates:
+            if self.equity_records:
+                self.day_start_equity = float(self.equity_records[-1]["equity"])
             prices = {}
             for sym in symbols:
                 row = row_map.get(sym, {}).get(date)
@@ -131,6 +134,15 @@ class PaperTradingEngine:
                         self._accept_signal(date, sig)
 
             equity = self._mark_to_market(prices)
+            halted_today = self._check_daily_loss(equity)
+            if halted_today:
+                self._force_close_all(date, row_map, "DAILY_STOP", "日内亏损熔断强制平仓")
+                prices = {
+                    sym: float(row_map.get(sym, {}).get(date)["close"])
+                    for sym in symbols
+                    if row_map.get(sym, {}).get(date) is not None
+                }
+                equity = self._mark_to_market(prices)
             self.equity_records.append({
                 "date": date.strftime("%Y-%m-%d"),
                 "cash": round(self.cash, 2),
@@ -138,14 +150,10 @@ class PaperTradingEngine:
                 "open_positions": len(self.positions),
                 "halted": self.trading_halted,
             })
-            self._check_daily_loss(equity)
 
         if dates:
             last_date = dates[-1]
-            for sym in list(self.positions):
-                row = row_map.get(sym, {}).get(last_date)
-                if row is not None:
-                    self._close_position(sym, last_date, float(row["close"]), "FORCE_CLOSE", "期末强制平仓")
+            self._force_close_all(last_date, row_map, "FORCE_CLOSE", "期末强制平仓")
 
         return self.report()
 
@@ -239,6 +247,7 @@ class PaperTradingEngine:
             order.reason = "ATR或资金不足"
             return
         direction = "LONG" if sig.action == "BUY" else "SHORT"
+        stop_loss, target = self._adjust_brackets(sig, price, direction)
         commission = price * lots * lot_value * RISK_PARAMS["commission_rate"]
         self.cash -= commission
         order.status = "FILLED"
@@ -250,8 +259,8 @@ class PaperTradingEngine:
             entry_price=round(price, 4),
             lots=lots,
             lot_value=lot_value,
-            stop_loss=round(float(sig.stop_loss), 4),
-            target=round(float(sig.target), 4),
+            stop_loss=round(float(stop_loss), 4),
+            target=round(float(target), 4),
             entry_commission=round(commission, 2),
             reason=sig.reason,
         )
@@ -328,6 +337,15 @@ class PaperTradingEngine:
         risk_per_lot = atr * RISK_PARAMS["atr_stop_mult"] * lot_value
         return max(0, int(risk_amount / risk_per_lot))
 
+    def _adjust_brackets(self, sig: Signal, fill_price: float, direction: str) -> tuple[float, float]:
+        if direction == "LONG":
+            stop_dist = max(float(sig.price) - float(sig.stop_loss), float(sig.atr) * RISK_PARAMS["atr_stop_mult"])
+            target_dist = max(float(sig.target) - float(sig.price), float(sig.atr) * RISK_PARAMS["atr_target_mult"])
+            return fill_price - stop_dist, fill_price + target_dist
+        stop_dist = max(float(sig.stop_loss) - float(sig.price), float(sig.atr) * RISK_PARAMS["atr_stop_mult"])
+        target_dist = max(float(sig.price) - float(sig.target), float(sig.atr) * RISK_PARAMS["atr_target_mult"])
+        return fill_price + stop_dist, fill_price - target_dist
+
     def _mark_to_market(self, prices: dict[str, float]) -> float:
         equity = self.cash
         for sym, pos in self.positions.items():
@@ -338,10 +356,20 @@ class PaperTradingEngine:
                 equity += (pos.entry_price - price) * pos.lots * pos.lot_value
         return float(equity)
 
-    def _check_daily_loss(self, equity: float) -> None:
-        drawdown = (equity - self.initial_capital) / self.initial_capital
+    def _force_close_all(self, date: pd.Timestamp, row_map: dict, action: str, reason: str) -> None:
+        for sym in list(self.positions):
+            row = row_map.get(sym, {}).get(date)
+            if row is not None:
+                self._close_position(sym, date, float(row["close"]), action, reason)
+
+    def _check_daily_loss(self, equity: float) -> bool:
+        if self.trading_halted:
+            return False
+        drawdown = (equity - self.day_start_equity) / self.day_start_equity
         if drawdown <= -self.max_daily_loss_pct:
             self.trading_halted = True
+            return True
+        return False
 
     def report(self) -> dict:
         equity = self.equity_records[-1]["equity"] if self.equity_records else self.cash

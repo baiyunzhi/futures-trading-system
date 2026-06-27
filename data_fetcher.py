@@ -7,6 +7,7 @@ import os
 import json
 import time
 import logging
+import hashlib
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
@@ -96,13 +97,11 @@ def _fetch_from_akshare(symbol: str) -> pd.DataFrame | None:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors="coerce")
 
-        df = df.dropna(subset=["close"])
-
         # 保留可用列
         keep = ["date", "open", "high", "low", "close", "volume"]
         if "open_interest" in df.columns:
             keep.append("open_interest")
-        return df[[c for c in keep if c in df.columns]]
+        return _validate_ohlcv(df[[c for c in keep if c in df.columns]], symbol)
 
     except Exception as e:
         logger.warning(f"akshare 获取 {symbol} 失败: {e}")
@@ -120,9 +119,13 @@ PRICE_ANCHORS = {
     "M0":  3200, "Y0":  8200, "C0":  2400, "SR0": 6200, "CF0": 15000,
 }
 
+def _stable_seed(symbol: str) -> int:
+    return int(hashlib.sha256(symbol.encode("utf-8")).hexdigest()[:8], 16)
+
+
 def _generate_sample_data(symbol: str, days: int = 500) -> pd.DataFrame:
     """生成带趋势+周期+随机噪声的仿真期货日线数据。"""
-    np.random.seed(hash(symbol) % (2**31))
+    np.random.seed(_stable_seed(symbol))
 
     end   = datetime.today()
     start = end - timedelta(days=days * 1.5)
@@ -138,10 +141,12 @@ def _generate_sample_data(symbol: str, days: int = 500) -> pd.DataFrame:
                + 0.02 * np.sin(np.arange(days) / 30))    # 30日周期
 
     closes  = base_price * np.cumprod(1 + returns)
-    highs   = closes * (1 + np.abs(np.random.randn(days)) * 0.006)
-    lows    = closes * (1 - np.abs(np.random.randn(days)) * 0.006)
     opens   = np.roll(closes, 1) * (1 + np.random.randn(days) * 0.002)
     opens[0] = base_price
+    base_high = np.maximum(opens, closes)
+    base_low  = np.minimum(opens, closes)
+    highs   = base_high * (1 + np.abs(np.random.randn(days)) * 0.006)
+    lows    = base_low * (1 - np.abs(np.random.randn(days)) * 0.006)
     volumes = np.random.randint(50_000, 500_000, size=days).astype(float)
 
     return pd.DataFrame({
@@ -154,12 +159,47 @@ def _generate_sample_data(symbol: str, days: int = 500) -> pd.DataFrame:
     })
 
 
+def _validate_ohlcv(df: pd.DataFrame, symbol: str) -> pd.DataFrame | None:
+    required = ["date", "open", "high", "low", "close", "volume"]
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        logger.warning(f"{symbol} 行情缺少字段: {missing}")
+        return None
+
+    out = df.copy()
+    out["date"] = pd.to_datetime(out["date"], errors="coerce")
+    for col in ["open", "high", "low", "close", "volume"]:
+        out[col] = pd.to_numeric(out[col], errors="coerce")
+    if "open_interest" in out.columns:
+        out["open_interest"] = pd.to_numeric(out["open_interest"], errors="coerce")
+
+    before = len(out)
+    out = out.dropna(subset=required)
+    out = out[(out["open"] > 0) & (out["high"] > 0) & (out["low"] > 0) & (out["close"] > 0)]
+    out = out[out["volume"] >= 0]
+    out = out[(out["high"] >= out[["open", "close", "low"]].max(axis=1)) &
+              (out["low"] <= out[["open", "close", "high"]].min(axis=1))]
+    out = out.sort_values("date").drop_duplicates("date", keep="last").reset_index(drop=True)
+    dropped = before - len(out)
+    if dropped:
+        logger.warning(f"{symbol} 数据质量过滤 {dropped} 行")
+    if len(out) < 60:
+        return None
+    return out
+
+
 # ─────────────────────────────────────────────
 #  缓存层
 # ─────────────────────────────────────────────
 
 def _cache_path(symbol: str) -> Path:
     return CACHE_DIR / f"{symbol}.csv"
+
+
+def _as_bool(value) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y"}
+    return bool(value)
 
 
 def _is_cache_valid(path: Path) -> bool:
@@ -182,14 +222,37 @@ def get_data(symbol: str, use_cache: bool = True) -> pd.DataFrame:
 
     if use_cache and _is_cache_valid(path):
         logger.info(f"[缓存] 读取 {symbol}")
-        return pd.read_csv(path, parse_dates=["date"])
+        cached = pd.read_csv(path, parse_dates=["date"])
+        validated = _validate_ohlcv(cached, symbol)
+        if validated is not None:
+            if "is_simulated" in cached.columns:
+                is_simulated = _as_bool(cached["is_simulated"].iloc[-1])
+                if is_simulated and len(validated) < int(DATA_PARAMS["lookback_days"] * 0.8):
+                    logger.warning(f"[缓存失效] {symbol} 仿真缓存长度不足，重新生成")
+                else:
+                    validated["is_simulated"] = is_simulated
+                    return validated
+            else:
+                return validated
+        logger.warning(f"[缓存失效] {symbol} 缓存数据质量不合格，重新拉取")
 
     logger.info(f"[拉取] {symbol} ({ALL_SYMBOLS.get(symbol, symbol)})")
     df = _fetch_from_akshare(symbol)
 
     if df is None or len(df) < 60:
+        if path.exists():
+            cached = pd.read_csv(path, parse_dates=["date"])
+            validated = _validate_ohlcv(cached, symbol)
+            cached_simulated = _as_bool(cached["is_simulated"].iloc[-1]) if "is_simulated" in cached.columns else False
+            if validated is not None and not cached_simulated and len(validated) >= 60:
+                logger.warning(f"[旧缓存] {symbol} 拉取失败，保留上一份真实行情缓存")
+                validated["is_simulated"] = False
+                return validated
         logger.warning(f"[仿真] {symbol} 使用仿真数据")
         df = _generate_sample_data(symbol, days=DATA_PARAMS["lookback_days"])
+        df = _validate_ohlcv(df, symbol)
+        if df is None:
+            raise ValueError(f"{symbol} 仿真数据生成失败")
         df["is_simulated"] = True
     else:
         df["is_simulated"] = False

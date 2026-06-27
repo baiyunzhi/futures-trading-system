@@ -152,7 +152,7 @@ def generate_signals(symbol: str, df: pd.DataFrame) -> list[Signal]:
                         date=date, symbol=symbol, action="SHORT",
                         price=close, stop_loss=stop_loss, target=target, atr=atr,
                         reason=(f"强势向下突破｜{BO_PERIOD}日新低={n_low:.1f}"
-                                f"｜实体率={body_ratio:.0%}｜量能={vol/volma:.1f}x"
+                                f"｜实体率={body_ratio:.0%}｜量能={vol/volma:.1f}"
                                 f"｜CI均值={ci_mean:.0f}")
                     ))
                 else:

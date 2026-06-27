@@ -60,6 +60,7 @@ def backtest_symbol(
 
     trades: list[Trade] = []
     open_signal: Signal | None = None
+    open_entry_date: pd.Timestamp | None = None
     pending_entry: Signal | None = None
     pending_exit: Signal | None = None
 
@@ -77,14 +78,28 @@ def backtest_symbol(
     def _exit_price(raw_price: float, direction: str) -> float:
         return raw_price - slippage if direction == "LONG" else raw_price + slippage
 
+    def _adjust_signal_for_fill(sig: Signal, fill_price: float, direction: str) -> Signal:
+        """按真实成交价平移信号给出的止损止盈距离，避免隔夜跳空后风险失真。"""
+        if direction == "LONG":
+            stop_dist = max(float(sig.price) - float(sig.stop_loss), float(sig.atr) * RISK_PARAMS["atr_stop_mult"])
+            target_dist = max(float(sig.target) - float(sig.price), float(sig.atr) * RISK_PARAMS["atr_target_mult"])
+            stop_loss = fill_price - stop_dist
+            target = fill_price + target_dist
+        else:
+            stop_dist = max(float(sig.stop_loss) - float(sig.price), float(sig.atr) * RISK_PARAMS["atr_stop_mult"])
+            target_dist = max(float(sig.price) - float(sig.target), float(sig.atr) * RISK_PARAMS["atr_target_mult"])
+            stop_loss = fill_price + stop_dist
+            target = fill_price - target_dist
+        return Signal(sig.date, sig.symbol, sig.action, fill_price, stop_loss, target, sig.atr, sig.reason)
+
     def _record_close(exit_date: pd.Timestamp, price: float) -> None:
-        nonlocal open_signal
+        nonlocal open_signal, open_entry_date
         result = rm.close_position(symbol, price)
         if result and open_signal:
             trades.append(Trade(
                 symbol     = symbol,
                 direction  = result["direction"],
-                entry_date = open_signal.date,
+                entry_date = open_entry_date or open_signal.date,
                 exit_date  = exit_date,
                 entry      = result["entry"],
                 exit       = result["exit"],
@@ -94,6 +109,7 @@ def backtest_symbol(
                 return_pct = result["return_pct"],
             ))
             open_signal = None
+            open_entry_date = None
 
     def _mark_to_market(close_price: float) -> float:
         pos = rm.positions.get(symbol)
@@ -120,17 +136,19 @@ def backtest_symbol(
         if pending_entry is not None and symbol not in rm.positions and rm.can_open(symbol):
             direction = "LONG" if pending_entry.action == "BUY" else "SHORT"
             fill_price = _entry_price(open_price, direction)
+            adjusted_signal = _adjust_signal_for_fill(pending_entry, fill_price, direction)
             opened = rm.open_position(
                 symbol,
                 direction,
                 fill_price,
-                pending_entry.atr,
+                adjusted_signal.atr,
                 lots=None,
                 lot_value=lot_value,
-                stop_loss=pending_entry.stop_loss,
-                target=pending_entry.target,
+                stop_loss=adjusted_signal.stop_loss,
+                target=adjusted_signal.target,
             )
-            open_signal = pending_entry if opened else None
+            open_signal = adjusted_signal if opened else None
+            open_entry_date = date if opened else None
             pending_entry = None
 
         if symbol in rm.positions:

@@ -62,22 +62,18 @@ def main():
                     f"评分={r.score:.1f}  入场={r.entry}  止损={r.stop_loss}  止盈={r.target}")
 
     # ── 5. 多策略回测 ──
-    logger.info("Step 5/5  多策略回测（两套策略对比）...")
+    logger.info("Step 5/5  纯结构策略回测...")
     from backtester import backtest_portfolio
-    import strategy_trend as st_trend
-    import strategy_breakout as st_bo
-    import strategy_range as st_range
+    from portfolio_backtester import backtest_unified_portfolio
+    from trade_decision import build_all_trade_decisions
+    import strategy_structure as st_structure
 
     syms = list(all_data_ind.keys())
     bt_trend = backtest_portfolio(all_data_ind, symbols=syms,
-                                  strategy_fn=st_trend.generate_signals,
-                                  strategy_name="趋势跟踪")
-    bt_bo    = backtest_portfolio(all_data_ind, symbols=syms,
-                                  strategy_fn=st_bo.generate_signals,
-                                  strategy_name="突破追涨")
-    bt_range = backtest_portfolio(all_data_ind, symbols=syms,
-                                  strategy_fn=st_range.generate_signals,
-                                  strategy_name="区间高抛低吸")
+                                  strategy_fn=st_structure.generate_signals,
+                                  strategy_name="纯结构策略")
+    unified_portfolio = backtest_unified_portfolio(all_data_ind)
+    trade_decisions = build_all_trade_decisions(all_data_ind, eligibility_snapshot=unified_portfolio.eligibility_snapshot)
     # 兼容 dashboard：portfolio_result 保留"默认"结果（趋势跟踪）
     portfolio_result = bt_trend
 
@@ -92,27 +88,17 @@ def main():
                         f"胜率={row['胜率%']:.0f}%  夏普={row['夏普比']:.2f}  "
                         f"笔数={row['交易次数']}")
 
-    _log_summary("趋势跟踪", bt_trend)
-    _log_summary("突破追涨", bt_bo)
-    _log_summary("区间高抛低吸", bt_range)
-
-    # 合并对比
-    s1 = bt_trend.get("summary", pd.DataFrame()).add_suffix("_趋势")
-    s2 = bt_bo.get("summary",    pd.DataFrame()).add_suffix("_突破")
-    if not s1.empty and not s2.empty:
-        merged = s1.rename(columns={"品种_趋势": "品种", "代码_趋势": "代码"}).merge(
-                 s2.rename(columns={"品种_突破": "品种", "代码_突破": "代码"}),
-                 on=["品种","代码"], how="outer").fillna(0)
-        logger.info("  ── 两套策略对比（按趋势策略收益排序）──")
-        for _, row in merged.sort_values("总收益%_趋势", ascending=False).head(8).iterrows():
-            logger.info(f"    {row['品种']:8s}  趋势={row['总收益%_趋势']:+.1f}%  突破={row['总收益%_突破']:+.1f}%")
+    _log_summary("纯结构策略", bt_trend)
+    logger.info(f"  [统一账户] 收益={unified_portfolio.metrics.get('total_return', 0):+.2f}%  "
+                f"回撤={unified_portfolio.metrics.get('max_drawdown', 0):.2f}%  "
+                f"交易={unified_portfolio.metrics.get('total_trades', 0)}")
 
     # ── 6. 本地模拟盘 ──
     logger.info("Step 6/6  本地模拟盘回放...")
     from paper_trading import run_paper_session
     paper_report = run_paper_session(
         all_data_ind,
-        st_trend.generate_signals,
+        st_structure.generate_signals,
         symbols=syms,
     )
     pa = paper_report.get("account", {})
@@ -132,10 +118,12 @@ def main():
         all_results      = analysis_results,
         rank_df          = rank_df,
         bt_results       = portfolio_result.get("results", {}),
-        bt_results_bo    = bt_bo.get("results", {}),
-        bt_results_range = bt_range.get("results", {}),
+        bt_results_bo    = None,
+        bt_results_range = None,
         all_data         = all_data_ind,
         paper_report     = paper_report,
+        trade_decisions  = trade_decisions,
+        unified_portfolio = unified_portfolio,
     )
     app.run(debug=False, host="127.0.0.1", port=8050)
 

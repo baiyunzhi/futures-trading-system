@@ -8,7 +8,7 @@ from data_fetcher import get_data
 from indicators import add_all_indicators
 from paper_trading import run_paper_session
 
-import strategy_trend as strategy
+import strategy_structure as strategy
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")

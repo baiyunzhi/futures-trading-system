@@ -35,13 +35,9 @@ for _sector, _items in VARIETIES.items():
         ALL_SYMBOLS[_sym] = _name
         SYMBOL_SECTOR[_sym] = _sector
 
-# ---------- 技术指标参数 ----------
+# ---------- 必要指标参数 ----------
 INDICATOR_PARAMS = {
-    "MA":   [5, 10, 20, 60],   # 均线周期
-    "RSI":  14,                  # RSI 周期
-    "MACD": (12, 26, 9),        # 快线/慢线/信号线
     "ATR":  14,                  # ATR 周期
-    "BB":   (20, 2.0),          # 布林带 (周期, 倍数)
 }
 
 # ---------- 品种评分权重（合计=1.0）----------
@@ -112,4 +108,17 @@ PAPER_PARAMS = {
     "end_date": None,
     "storage_dir": "paper_trading",
     "max_daily_loss_pct": 0.03,
+}
+
+# ---------- 组合准入设置 ----------
+# rolling_oos 只使用交易日之前的已平仓记录判断当日是否允许开仓，避免固定黑名单过拟合。
+PORTFOLIO_FILTER_PARAMS = {
+    "enabled": True,
+    "mode": "rolling_oos",
+    "lookback_days": 365,
+    "min_trades": 2,
+    "min_net_pnl": 0,
+    "min_win_rate": 35,
+    "min_profit_factor": 1.0,
+    "blocked_symbols": [],
 }

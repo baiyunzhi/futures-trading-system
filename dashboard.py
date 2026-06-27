@@ -19,6 +19,8 @@ from config import ALL_SYMBOLS, SYMBOL_SECTOR
 from market_analyzer import AnalysisResult, get_detail_text, results_to_dataframe
 from structure_analyzer import find_pivots
 from kline_density import choppiness_index, density_score_series
+from audit_report import audit_items_to_frame, build_audit_items, has_simulated_data
+from trade_decision import build_all_trade_decisions, decisions_to_dataframe
 
 CARD = {"backgroundColor": "#161b27", "border": "1px solid #2a2a3e",
         "borderRadius": "8px", "padding": "14px", "marginBottom": "14px"}
@@ -40,11 +42,11 @@ def _state_color(state: str) -> str:
 # ─────────────────────────────────────────────
 
 def build_kline_chart(df: pd.DataFrame, symbol: str, result: AnalysisResult) -> go.Figure:
-    """5行子图：K线+MA+枢轴 / MACD / 成交量 / CI密度 / 持仓量（若有）"""
+    """K线结构图：K线+枢轴 / 成交量 / CI密度 / 持仓量（若有）"""
     has_oi = "open_interest" in df.columns and df["open_interest"].notna().any()
-    rows = 5 if has_oi else 4
-    row_heights = [0.45, 0.15, 0.15, 0.15, 0.10] if has_oi else [0.45, 0.18, 0.18, 0.19]
-    subplot_titles = ["K线 + 均线 + 枢轴", "MACD", "成交量", "震荡指数(CI) + 密度", "持仓量"] if has_oi else ["K线 + 均线 + 枢轴", "MACD", "成交量", "震荡指数(CI) + 密度"]
+    rows = 4 if has_oi else 3
+    row_heights = [0.55, 0.20, 0.17, 0.08] if has_oi else [0.58, 0.20, 0.22]
+    subplot_titles = ["K线 + 结构枢轴", "成交量", "震荡指数(CI) + 密度", "持仓量"] if has_oi else ["K线 + 结构枢轴", "成交量", "震荡指数(CI) + 密度"]
 
     fig = make_subplots(rows=rows, cols=1, shared_xaxes=True,
                         vertical_spacing=0.02, row_heights=row_heights,
@@ -58,11 +60,6 @@ def build_kline_chart(df: pd.DataFrame, symbol: str, result: AnalysisResult) -> 
                                   low=tail["low"], close=tail["close"],
                                   increasing_line_color="#26a69a", decreasing_line_color="#ef5350",
                                   name="K线", showlegend=False), row=1, col=1)
-
-    for col, color, w in [("MA5","#FFD700",1),("MA10","#FF8C00",1),("MA20","#00BFFF",1.5),("MA60","#FF69B4",2)]:
-        if col in tail.columns:
-            fig.add_trace(go.Scatter(x=x, y=tail[col], line=dict(color=color, width=w),
-                                     name=col, showlegend=True), row=1, col=1)
 
     # 枢轴标注  — find_pivots 返回 (highs, lows) PivotPoint 列表
     try:
@@ -92,42 +89,30 @@ def build_kline_chart(df: pd.DataFrame, symbol: str, result: AnalysisResult) -> 
     except Exception:
         pass
 
-    # ── Row 2: MACD ──
-    if "DIF" in tail.columns and "DEA" in tail.columns:
-        hist = tail["DIF"] - tail["DEA"]
-        colors = ["#26a69a" if v >= 0 else "#ef5350" for v in hist]
-        fig.add_trace(go.Bar(x=x, y=hist, marker_color=colors, name="MACD柱", showlegend=False), row=2, col=1)
-        fig.add_trace(go.Scatter(x=x, y=tail["DIF"], line=dict(color="#FFD700", width=1), name="DIF"), row=2, col=1)
-        fig.add_trace(go.Scatter(x=x, y=tail["DEA"], line=dict(color="#FF8C00", width=1), name="DEA"), row=2, col=1)
-
-    # ── Row 3: 成交量（按涨跌 + 放量高亮着色）──
+    # ── Row 2: 成交量（按涨跌 + 放量高亮着色）──
     if "volume" in tail.columns:
-        vol_ma = tail["volume"].rolling(5).mean()
         bar_colors = []
-        for i, (idx, row_s) in enumerate(tail.iterrows()):
+        for _, row_s in tail.iterrows():
             base = "#26a69a" if row_s["close"] >= row_s["open"] else "#ef5350"
-            if pd.notna(vol_ma.iloc[i]) and row_s["volume"] > vol_ma.iloc[i] * 1.5:
-                base = "#FFD700"  # 放量高亮
             bar_colors.append(base)
-        fig.add_trace(go.Bar(x=x, y=tail["volume"], marker_color=bar_colors, name="成交量", showlegend=False), row=3, col=1)
-        fig.add_trace(go.Scatter(x=x, y=vol_ma, line=dict(color="#aaa", width=1), name="量5MA", showlegend=False), row=3, col=1)
+        fig.add_trace(go.Bar(x=x, y=tail["volume"], marker_color=bar_colors, name="成交量", showlegend=False), row=2, col=1)
 
-    # ── Row 4: CI + 密度评分 ──
+    # ── Row 3: CI + 密度评分 ──
     ci_series = choppiness_index(tail)
     den_df = density_score_series(tail)
     fig.add_trace(go.Scatter(x=x, y=ci_series.values, line=dict(color="#00BFFF", width=1.5),
-                             name="CI(14)", showlegend=True), row=4, col=1)
+                             name="CI(14)", showlegend=True), row=3, col=1)
     if "density_score" in den_df.columns:
         fig.add_trace(go.Scatter(x=x, y=den_df["density_score"].values,
                                  line=dict(color="#FFA500", width=1.5, dash="dot"),
-                                 name="密度评分", showlegend=True), row=4, col=1)
+                                 name="密度评分", showlegend=True), row=3, col=1)
     for val, color, dash in [(38.2, "#26a69a", "dash"), (61.8, "#ef5350", "dash")]:
-        fig.add_hline(y=val, line_dash=dash, line_color=color, opacity=0.6, row=4, col=1)
+        fig.add_hline(y=val, line_dash=dash, line_color=color, opacity=0.6, row=3, col=1)
 
-    # ── Row 5: 持仓量 ──
+    # ── Row 4: 持仓量 ──
     if has_oi:
         fig.add_trace(go.Bar(x=x, y=tail["open_interest"], marker_color="#9370DB",
-                             name="持仓量", showlegend=False), row=5, col=1)
+                             name="持仓量", showlegend=False), row=4, col=1)
 
     fig.update_layout(
         template="plotly_dark", paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
@@ -185,8 +170,8 @@ def build_equity_chart(bt_results: dict) -> go.Figure:
             continue
         if eq_s is None or len(eq_s) == 0:
             continue
-        eq_s = pd.Series(eq_s.values if hasattr(eq_s, "values") else list(eq_s))
-        fig.add_trace(go.Scatter(x=list(range(len(eq_s))), y=eq_s, name=sym,
+        eq_s = pd.Series(eq_s)
+        fig.add_trace(go.Scatter(x=[str(x) for x in eq_s.index], y=eq_s.values, name=sym,
                                  line=dict(color=palette[i % len(palette)], width=1.5)))
     fig.update_layout(template="plotly_dark", paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
                       height=250, margin=dict(l=40, r=20, t=20, b=20),
@@ -205,6 +190,23 @@ def build_paper_equity_chart(paper_report: dict) -> go.Figure:
     df = pd.DataFrame(rows)
     fig.add_trace(go.Scatter(x=df["date"], y=df["equity"], name="权益", line=dict(color="#26a69a", width=2)))
     fig.add_trace(go.Scatter(x=df["date"], y=df["cash"], name="现金", line=dict(color="#FFD700", width=1.2)))
+    fig.update_layout(
+        template="plotly_dark", paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
+        height=260, margin=dict(l=40, r=20, t=20, b=40),
+        legend=dict(orientation="h", y=1.05, x=1, xanchor="right"),
+    )
+    return fig
+
+
+def build_unified_equity_chart(unified_result) -> go.Figure:
+    fig = go.Figure()
+    eq = getattr(unified_result, "equity_curve", pd.Series(dtype=float))
+    if eq is None or len(eq) == 0:
+        fig.add_annotation(text="暂无统一账户组合回测数据", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+    else:
+        eq = pd.Series(eq)
+        fig.add_trace(go.Scatter(x=[str(x) for x in eq.index], y=eq.values, name="统一账户权益",
+                                 line=dict(color="#00BFFF", width=2)))
     fig.update_layout(
         template="plotly_dark", paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
         height=260, margin=dict(l=40, r=20, t=20, b=40),
@@ -288,6 +290,8 @@ def create_app(
     bt_results_bo:    dict | None = None,   # 突破策略回测结果（可选）
     bt_results_range: dict | None = None,   # 区间策略回测结果（可选）
     paper_report: dict | None = None,
+    trade_decisions: list | None = None,
+    unified_portfolio = None,
 ) -> dash.Dash:
     if dash is None or dbc is None:
         raise RuntimeError("缺少 Dash 依赖，请先运行: pip install -r requirements.txt")
@@ -304,6 +308,13 @@ def create_app(
     paper_account = paper_report.get("account", {})
     paper_positions = paper_report.get("positions", [])
     paper_fills = list(reversed(paper_report.get("fills", [])))[:50]
+    audit_df = audit_items_to_frame(build_audit_items(has_simulated_data(all_data)))
+    unified_metrics = getattr(unified_portfolio, "metrics", {}) if unified_portfolio is not None else {}
+    trade_decisions = trade_decisions or build_all_trade_decisions(
+        all_data,
+        eligibility_snapshot=getattr(unified_portfolio, "eligibility_snapshot", {}),
+    )
+    decision_df = decisions_to_dataframe(trade_decisions)
 
     # ── 状态徽章 ──
     def _badge(state):
@@ -361,6 +372,58 @@ def create_app(
                 html.Div("品种总数", style={"color": "#aaa", "fontWeight": "bold"}),
                 html.H4(str(len(all_results)), style={"color": "#aaa", "margin": "0"}),
             ], style={**CARD, "textAlign": "center"}), width=2),
+        ], className="mb-3"),
+
+        # ── 可执行交易决策 ──
+        dbc.Row([
+            dbc.Col([
+                dbc.Card([
+                    html.H6("可执行交易决策", style={"color": "#26a69a", "marginBottom": "8px"}),
+                    dash_table.DataTable(
+                        columns=[{"name": c, "id": c} for c in decision_df.columns],
+                        data=decision_df.to_dict("records"),
+                        sort_action="native",
+                        filter_action="native",
+                        page_size=10,
+                        style_table={"overflowX": "auto"},
+                        style_cell={"backgroundColor": "#0e1117", "color": "#ccc",
+                                    "border": "1px solid #2a2a3e", "fontSize": "12px",
+                                    "padding": "5px 8px", "textAlign": "center"},
+                        style_header={"backgroundColor": "#161b27", "fontWeight": "bold",
+                                      "color": "#aaa", "border": "1px solid #333"},
+                        style_data_conditional=[
+                            {"if": {"filter_query": "{可交易} = 是", "column_id": "可交易"}, "color": "#26a69a", "fontWeight": "bold"},
+                            {"if": {"filter_query": "{可交易} = 否", "column_id": "可交易"}, "color": "#888"},
+                            {"if": {"filter_query": "{结构} = CHOP", "column_id": "结构"}, "color": "#ef5350"},
+                            {"if": {"filter_query": "{策略} contains 禁止", "column_id": "策略"}, "color": "#ef5350"},
+                        ],
+                    ),
+                ], style=CARD),
+            ], width=12),
+        ], className="mb-3"),
+
+        # ── 统一账户组合回测 ──
+        dbc.Row([
+            dbc.Col([
+                dbc.Card([
+                    html.H6("统一账户组合回测", style={"color": "#26a69a", "marginBottom": "8px"}),
+                    dbc.Row([
+                        dbc.Col(html.Div([html.Small("收益率", style={"color": "#888"}),
+                                          html.H5(f"{unified_metrics.get('total_return', 0):+.2f}%", style={"margin": "0", "color": "#FFD700"})]), width=2),
+                        dbc.Col(html.Div([html.Small("最大回撤", style={"color": "#888"}),
+                                          html.H5(f"{unified_metrics.get('max_drawdown', 0):.2f}%", style={"margin": "0", "color": "#ef5350"})]), width=2),
+                        dbc.Col(html.Div([html.Small("交易次数", style={"color": "#888"}),
+                                          html.H5(str(unified_metrics.get("total_trades", 0)), style={"margin": "0"})]), width=2),
+                        dbc.Col(html.Div([html.Small("胜率", style={"color": "#888"}),
+                                          html.H5(f"{unified_metrics.get('win_rate', 0):.1f}%", style={"margin": "0"})]), width=2),
+                        dbc.Col(html.Div([html.Small("夏普", style={"color": "#888"}),
+                                          html.H5(str(unified_metrics.get("sharpe", 0)), style={"margin": "0"})]), width=2),
+                        dbc.Col(html.Div([html.Small("盈亏比", style={"color": "#888"}),
+                                          html.H5(str(unified_metrics.get("profit_factor", 0)), style={"margin": "0"})]), width=2),
+                    ], className="mb-2"),
+                    dcc.Graph(figure=build_unified_equity_chart(unified_portfolio), config={"displayModeBar": False}),
+                ], style=CARD),
+            ], width=12),
         ], className="mb-3"),
 
         # ── 模拟盘面板 ──
@@ -470,6 +533,37 @@ def create_app(
                         style_header={"backgroundColor": "#161b27", "fontWeight": "bold",
                                       "color": "#aaa", "border": "1px solid #333"},
                         style_data_conditional=TABLE_COND,
+                    ),
+                ], style=CARD),
+            ], width=12),
+        ], className="mb-3"),
+
+        # ── 系统审计面板 ──
+        dbc.Row([
+            dbc.Col([
+                dbc.Card([
+                    html.H6("系统审计与漏洞修复状态", style={"color": "#26a69a", "marginBottom": "8px"}),
+                    dash_table.DataTable(
+                        columns=[
+                            {"name": "级别", "id": "level"},
+                            {"name": "状态", "id": "status"},
+                            {"name": "问题", "id": "title"},
+                            {"name": "处理说明", "id": "detail"},
+                        ],
+                        data=audit_df.to_dict("records"),
+                        page_size=10,
+                        style_table={"overflowX": "auto"},
+                        style_cell={"backgroundColor": "#0e1117", "color": "#ccc",
+                                    "border": "1px solid #2a2a3e", "fontSize": "12px",
+                                    "padding": "5px 8px", "textAlign": "left"},
+                        style_header={"backgroundColor": "#161b27", "fontWeight": "bold",
+                                      "color": "#aaa", "border": "1px solid #333"},
+                        style_data_conditional=[
+                            {"if": {"filter_query": "{level} = 高", "column_id": "level"}, "color": "#ef5350", "fontWeight": "bold"},
+                            {"if": {"filter_query": "{status} contains 已修复", "column_id": "status"}, "color": "#26a69a"},
+                            {"if": {"filter_query": "{status} contains 待", "column_id": "status"}, "color": "#FFD700"},
+                            {"if": {"filter_query": "{status} contains 风险", "column_id": "status"}, "color": "#ef5350"},
+                        ],
                     ),
                 ], style=CARD),
             ], width=12),

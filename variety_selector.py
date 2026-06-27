@@ -8,6 +8,7 @@ import pandas as pd
 from config import SCORE_WEIGHTS, ALL_SYMBOLS, SYMBOL_SECTOR
 from indicators import add_all_indicators, get_latest_row
 from kline_density import analyze_density
+from structure_analyzer import analyze_structure
 
 
 # ─────────────────────────────────────────────
@@ -15,26 +16,11 @@ from kline_density import analyze_density
 # ─────────────────────────────────────────────
 
 def _trend_score(row: pd.Series, df: pd.DataFrame) -> float:
-    """
-    趋势强度评分。
-    - MA5 > MA10 > MA20 > MA60：满分排列 +40
-    - ADX 强度加分（最高 +40）
-    - 价格在 MA20 上方/下方再加分
-    """
-    score = 0.0
-
-    # MA 多头排列
-    ma5, ma10, ma20, ma60 = row.get("MA5"), row.get("MA10"), row.get("MA20"), row.get("MA60")
-    if all(pd.notna([ma5, ma10, ma20, ma60])):
-        if ma5 > ma10:  score += 10
-        if ma10 > ma20: score += 15
-        if ma20 > ma60: score += 15
-
-    # ADX 趋势强度（>25 算有趋势，>40 算强趋势）
-    adx = row.get("ADX", np.nan)
-    if pd.notna(adx):
-        score += min(40, adx)   # ADX 直接映射到分数
-
+    structure = analyze_structure(df)
+    score = 35.0 if structure.trend in ("UPTREND", "DOWNTREND") else 15.0
+    if structure.sub_state in ("BREAKOUT_UP", "BREAKOUT_DN"):
+        score += 35
+    score += min(30, structure.pivot_range_pct * 4)
     return min(100, score)
 
 
@@ -43,7 +29,6 @@ def _momentum_score(row: pd.Series, df: pd.DataFrame) -> float:
     动量评分。
     - 近 5 日涨跌幅
     - 近 20 日涨跌幅
-    - RSI 位置（50附近为中性，70以上空间压缩）
     """
     score = 50.0   # 中性基准
 
@@ -52,14 +37,6 @@ def _momentum_score(row: pd.Series, df: pd.DataFrame) -> float:
         ret20 = (df["close"].iloc[-1] / df["close"].iloc[-20] - 1) * 100
         score += np.clip(ret5  * 3, -20, 20)
         score += np.clip(ret20 * 1.5, -20, 20)
-
-    rsi = row.get("RSI", np.nan)
-    if pd.notna(rsi):
-        # RSI 40-65 加分，<30 or >75 减分（极端）
-        if 40 <= rsi <= 65:
-            score += 10
-        elif rsi < 30 or rsi > 75:
-            score -= 10
 
     return np.clip(score, 0, 100)
 
@@ -83,14 +60,6 @@ def _volatility_score(row: pd.Series, df: pd.DataFrame) -> float:
         score = atr_pct / 0.8 * 60   # 波动太低
     else:
         score = max(0, 100 - (atr_pct - 2.5) * 25)  # 波动太高
-
-    # 量价配合：成交量 > 5日均量
-    vol    = row.get("volume", np.nan)
-    volma5 = row.get("VOL_MA5", np.nan)
-    if pd.notna(vol) and pd.notna(volma5) and volma5 > 0:
-        ratio = vol / volma5
-        if ratio > 1.2:
-            score = min(100, score + 10)
 
     return np.clip(score, 0, 100)
 
@@ -121,8 +90,8 @@ def score_symbol(symbol: str, df: pd.DataFrame) -> dict:
     density = analyze_density(df_ind)
     total   = max(0.0, base_score - density.penalty)
 
-    # 趋势方向：MA5 与 MA20 比较
-    direction = "多" if row.get("MA5", 0) > row.get("MA20", 0) else "空"
+    structure = analyze_structure(df_ind)
+    direction = "多" if structure.trend == "UPTREND" or structure.sub_state == "BREAKOUT_UP" else "空"
 
     return {
         "symbol":        symbol,
@@ -139,10 +108,6 @@ def score_symbol(symbol: str, df: pd.DataFrame) -> dict:
         "direction":     direction,
         "close":         round(float(row.get("close", 0)), 1),
         "atr":           round(float(row.get("ATR", 0)), 1),
-        "rsi":           round(float(row.get("RSI", 50)), 1),
-        "adx":           round(float(row.get("ADX", 0)), 1),
-        "ma5":           round(float(row.get("MA5", 0)), 1),
-        "ma20":          round(float(row.get("MA20", 0)), 1),
         "df_ind":        df_ind,
         "density":       density,   # 完整密度对象供后续使用
     }

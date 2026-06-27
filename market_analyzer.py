@@ -1,6 +1,6 @@
 # ============================================================
 #  市场状态分析模块（v2）
-#  整合：价格结构 + 技术指标 + 量能 + 持仓量 → 四维综合判断
+#  整合：价格结构 + K线密度 + 量能 + 持仓量 → 四维综合判断
 # ============================================================
 
 from __future__ import annotations
@@ -42,11 +42,7 @@ class AnalysisResult:
     # ── 价格结构 ──
     structure: StructureState
 
-    # ── 技术指标摘要 ──
     direction:   str          # "多" / "空"
-    rsi:         float
-    adx:         float
-    macd_signal: str          # "金叉" / "死叉" / "中性"
 
     # ── 量价持仓 ──
     vol_oi: VolOIResult
@@ -96,25 +92,7 @@ def _build_full_description(
         f"（幅度 {structure.pivot_range_pct:.1f}%）"
     )
 
-    # ③ 技术指标
-    rsi  = row.get("RSI", 50)
-    adx  = row.get("ADX", 0)
-    dif  = row.get("DIF", 0)
-    dea  = row.get("DEA", 0)
-    ma5  = row.get("MA5", entry)
-    ma20 = row.get("MA20", entry)
-    ma60 = row.get("MA60", entry)
-
-    rsi_desc  = (f"RSI={rsi:.0f}超买" if rsi > 70 else
-                 f"RSI={rsi:.0f}超卖" if rsi < 30 else f"RSI={rsi:.0f}")
-    macd_desc = "MACD金叉" if dif > dea else "MACD死叉"
-    ma_desc   = ("多头排列" if ma5 > ma20 > ma60 else
-                 "空头排列" if ma5 < ma20 < ma60 else "均线整理")
-    adx_desc  = (f"ADX={adx:.0f}强趋势" if adx > 40 else
-                 f"ADX={adx:.0f}有趋势" if adx > 25 else f"ADX={adx:.0f}震荡")
-    lines.append(f"【指标】{ma_desc}；{macd_desc}；{rsi_desc}；{adx_desc}")
-
-    # ④ 量价持仓
+    # ③ 量价持仓
     lines.append(f"【量能】{vol_oi.vol_state.label}——{vol_oi.vol_state.description}")
     oi = vol_oi.oi_state
     if oi.code != "NO_DATA":
@@ -122,7 +100,7 @@ def _build_full_description(
     else:
         lines.append("【持仓】暂无持仓量数据，建议参考交易所持仓排行")
 
-    # ⑤ 操作建议
+    # ④ 操作建议
     action_map = {
         MarketState.OBSERVE:     "暂不操作，等待信号明确",
         MarketState.LIGHT_LONG:  f"轻仓做多，入场约 {entry:.1f}，止损 {stop:.1f}，目标 {target:.1f}",
@@ -162,10 +140,6 @@ def _determine_state(
 
     sub   = structure.sub_state
     trend = structure.trend
-    dif   = row.get("DIF", 0)
-    dea   = row.get("DEA", 0)
-    adx   = row.get("ADX", 0)
-    rsi   = row.get("RSI", 50)
     vs    = vol_oi.combined_signal
     vc    = vol_oi.combined_score
 
@@ -179,37 +153,31 @@ def _determine_state(
 
     # ── 趋势+回踩=做多机会 ──
     if sub == "PULLBACK_UP" and trend == "UPTREND":
-        if dif > dea and vs in ("strong_bull", "bull", "neutral"):
+        if vs in ("strong_bull", "bull", "neutral"):
             return MarketState.LIGHT_LONG
-        if dif > dea and vs == "strong_bull" and not downgrade:
+        if vs == "strong_bull" and not downgrade:
             return MarketState.TREND_LONG
 
     # ── 趋势+反弹=做空机会 ──
     if sub == "PULLBACK_DN" and trend == "DOWNTREND":
-        if dif < dea and vs in ("strong_bear", "bear", "neutral"):
+        if vs in ("strong_bear", "bear", "neutral"):
             return MarketState.LIGHT_SHORT
-        if dif < dea and vs == "strong_bear" and not downgrade:
+        if vs == "strong_bear" and not downgrade:
             return MarketState.TREND_SHORT
 
-    # ── 强趋势（ADX + 量价持仓同向）──
+    # ── 强结构 + 量价持仓同向 ──
     if score >= STATE_THRESHOLDS["trend_long"] and not downgrade:
-        if direction == "多" and adx > 25 and dif > dea and vs in ("strong_bull", "bull"):
+        if direction == "多" and trend == "UPTREND" and vs in ("strong_bull", "bull"):
             return MarketState.TREND_LONG
-        if direction == "空" and adx > 25 and dif < dea and vs in ("strong_bear", "bear"):
+        if direction == "空" and trend == "DOWNTREND" and vs in ("strong_bear", "bear"):
             return MarketState.TREND_SHORT
 
     # ── 中等信号 → 轻仓 ──
     if score >= STATE_THRESHOLDS["light_trade"]:
-        if direction == "多" and dif > dea:
+        if direction == "多" and trend != "DOWNTREND":
             return MarketState.LIGHT_LONG
-        if direction == "空" and dif < dea:
+        if direction == "空" and trend != "UPTREND":
             return MarketState.LIGHT_SHORT
-
-    # ── RSI 极值 ──
-    if rsi < 30 and trend != "DOWNTREND":
-        return MarketState.LIGHT_LONG
-    if rsi > 70 and trend != "UPTREND":
-        return MarketState.LIGHT_SHORT
 
     return MarketState.OBSERVE
 
@@ -233,11 +201,6 @@ def analyze_symbol(
 
     close = float(row["close"])
     atr   = float(row.get("ATR", close * 0.015))
-    rsi   = float(row.get("RSI", 50))
-    adx   = float(row.get("ADX", 0))
-    dif   = float(row.get("DIF", 0))
-    dea   = float(row.get("DEA", 0))
-    macd_signal = "金叉" if dif > dea else "死叉"
 
     structure = analyze_structure(df_ind)
     vol_oi    = analyze_vol_oi(df_ind)
@@ -264,7 +227,6 @@ def analyze_symbol(
     return AnalysisResult(
         symbol=symbol, name=name, state=state, score=score,
         structure=structure, direction=direction,
-        rsi=round(rsi, 1), adx=round(adx, 1), macd_signal=macd_signal,
         vol_oi=vol_oi, density=density,
         entry=round(close, 1), stop_loss=round(stop, 1),
         target=round(target, 1), atr=round(atr, 1),

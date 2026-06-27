@@ -40,9 +40,12 @@ def build():
     from variety_selector import rank_symbols
     from market_analyzer import analyze_all, results_to_dataframe, get_detail_text
     from backtester import backtest_portfolio
-    from dashboard import build_score_heatmap, build_kline_chart, build_equity_chart, build_paper_equity_chart
+    from dashboard import build_score_heatmap, build_kline_chart, build_equity_chart, build_paper_equity_chart, build_unified_equity_chart
     from paper_trading import run_paper_session
-    import strategy_trend as st_trend
+    from audit_report import audit_items_to_frame, build_audit_items, has_simulated_data
+    from portfolio_backtester import backtest_unified_portfolio
+    from trade_decision import build_all_trade_decisions, decisions_to_dataframe
+    import strategy_structure as st_structure
 
     logger.info("加载数据 + 计算指标...")
     all_data = get_all_data(use_cache=True)
@@ -54,7 +57,10 @@ def build():
     state_df = results_to_dataframe(analysis_results)
     portfolio_result = backtest_portfolio(all_data_ind, symbols=list(all_data_ind.keys()))
     summary_df = portfolio_result.get("summary")
-    paper_report = run_paper_session(all_data_ind, st_trend.generate_signals, symbols=list(all_data_ind.keys()))
+    unified_portfolio = backtest_unified_portfolio(all_data_ind)
+    trade_decisions = build_all_trade_decisions(all_data_ind, eligibility_snapshot=unified_portfolio.eligibility_snapshot)
+    decision_df = decisions_to_dataframe(trade_decisions)
+    paper_report = run_paper_session(all_data_ind, st_structure.generate_signals, symbols=list(all_data_ind.keys()))
 
     # ── 渲染图表 ──
     logger.info("渲染图表...")
@@ -65,6 +71,7 @@ def build():
     parts.append(_fig_html(build_score_heatmap(rank_df), "heatmap", include_js=True))
     parts.append(_fig_html(build_equity_chart(portfolio_result.get("results", {})), "equity", include_js=False))
     parts.append(_fig_html(build_paper_equity_chart(paper_report), "paper-equity", include_js=False))
+    parts.append(_fig_html(build_unified_equity_chart(unified_portfolio), "unified-equity", include_js=False))
 
     # 每个品种的K线图 + 行情深度分析文字，预渲染，用 JS 下拉切换显示
     import html as _htmlmod
@@ -102,6 +109,7 @@ def build():
 
     summary_table = df_to_table(summary_df, "tbl")
     state_table = df_to_table(state_df, "tbl")
+    decision_table = df_to_table(decision_df, "tbl")
     paper_account = paper_report.get("account", {})
     paper_positions = pd.DataFrame(paper_report.get("positions", []))
     paper_fills = pd.DataFrame(list(reversed(paper_report.get("fills", [])))[:30])
@@ -116,15 +124,28 @@ def build():
 
     from datetime import datetime
     updated = datetime.now().strftime("%Y-%m-%d %H:%M")
-    simulated = any(df.get("is_simulated", False).any() if "is_simulated" in df else False
-                    for df in all_data.values())
+    simulated = has_simulated_data(all_data)
     data_note = "⚠️ 本页基于<strong>仿真数据</strong>生成（akshare 联网失败时的演示模式）。" if simulated \
         else "数据来源：akshare 真实行情。"
+    audit_table = df_to_table(
+        audit_items_to_frame(build_audit_items(simulated)).rename(columns={
+            "level": "级别",
+            "status": "状态",
+            "title": "问题",
+            "detail": "处理说明",
+        }),
+        "tbl",
+    )
 
     html = TEMPLATE.format(
         heatmap=parts[0],
         equity=parts[1],
         paper_equity=parts[2],
+        unified_equity=parts[3],
+        unified_return=f"{unified_portfolio.metrics.get('total_return', 0):+.2f}%",
+        unified_drawdown=f"{unified_portfolio.metrics.get('max_drawdown', 0):.2f}%",
+        unified_trades=unified_portfolio.metrics.get("total_trades", 0),
+        unified_win_rate=f"{unified_portfolio.metrics.get('win_rate', 0):.1f}%",
         paper_equity_value=f"{paper_account.get('equity', 0):,.2f}",
         paper_return=f"{paper_account.get('return_pct', 0):+.2f}%",
         paper_positions_count=paper_account.get("open_positions", 0),
@@ -136,8 +157,10 @@ def build():
         kline_boxes="\n".join(kline_divs),
         detail_boxes="\n".join(detail_divs),
         options=options,
+        decision_table=decision_table,
         summary_table=summary_table,
         state_table=state_table,
+        audit_table=audit_table,
         updated=updated,
         data_note=data_note,
     )
@@ -204,6 +227,22 @@ TEMPLATE = """<!DOCTYPE html>
   </div>
 
   <div class="card">
+    <h2>可执行交易决策</h2>
+    {decision_table}
+  </div>
+
+  <div class="card">
+    <h2>统一账户组合回测</h2>
+    <div class="metric-row">
+      <div class="metric"><span>收益率</span><strong>{unified_return}</strong></div>
+      <div class="metric"><span>最大回撤</span><strong>{unified_drawdown}</strong></div>
+      <div class="metric"><span>交易次数</span><strong>{unified_trades}</strong></div>
+      <div class="metric"><span>胜率</span><strong>{unified_win_rate}</strong></div>
+    </div>
+    {unified_equity}
+  </div>
+
+  <div class="card">
     <h2>各品种回测净值曲线</h2>
     {equity}
   </div>
@@ -223,6 +262,11 @@ TEMPLATE = """<!DOCTYPE html>
     {paper_positions_table}
     <h2 style="margin-top:14px">最近成交</h2>
     {paper_fills_table}
+  </div>
+
+  <div class="card">
+    <h2>系统审计与漏洞修复状态</h2>
+    {audit_table}
   </div>
 
   <div class="grid">
