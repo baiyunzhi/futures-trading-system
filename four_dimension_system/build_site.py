@@ -67,10 +67,8 @@ def kline_svg(frame: pd.DataFrame, width: int = 1100, height: int = 520) -> str:
         return ""
     top_pad = 24
     price_h = 260
-    volume_top = 320
-    volume_h = 70
-    oi_top = 425
-    oi_h = 55
+    sub_top = 330
+    sub_h = 120
     bottom_pad = 32
     left_pad = 58
     right_pad = 18
@@ -78,6 +76,11 @@ def kline_svg(frame: pd.DataFrame, width: int = 1100, height: int = 520) -> str:
     price_high = float(data["high"].max())
     price_low = float(data["low"].min())
     price_span = price_high - price_low if price_high > price_low else 1.0
+    high_row = data.loc[data["high"].idxmax()]
+    low_row = data.loc[data["low"].idxmin()]
+    max_volume_row = data.loc[data["volume"].idxmax()]
+    max_volume_high = float(max_volume_row["high"])
+    max_volume_low = float(max_volume_row["low"])
     max_volume = float(data["volume"].max()) if float(data["volume"].max()) > 0 else 1.0
     oi_high = float(data["open_interest"].max())
     oi_low = float(data["open_interest"].min())
@@ -89,10 +92,13 @@ def kline_svg(frame: pd.DataFrame, width: int = 1100, height: int = 520) -> str:
         return top_pad + (price_high - price) / price_span * price_h
 
     def volume_y(volume: float) -> float:
-        return volume_top + volume_h - volume / max_volume * volume_h
+        return sub_top + sub_h - volume / max_volume * sub_h
 
     def oi_y(value: float) -> float:
-        return oi_top + (oi_high - value) / oi_span * oi_h
+        return sub_top + (oi_high - value) / oi_span * sub_h
+
+    def x_at(row_index: int) -> float:
+        return left_pad + row_index * step + step / 2
 
     elements = [
         f'<svg viewBox="0 0 {width} {height}" class="kline" role="img">',
@@ -100,10 +106,12 @@ def kline_svg(frame: pd.DataFrame, width: int = 1100, height: int = 520) -> str:
         f'<line x1="{left_pad}" y1="{top_pad + price_h}" x2="{width - right_pad}" y2="{top_pad + price_h}" class="axis"/>',
         f'<text x="8" y="{top_pad + 4}" class="axis-label">{price_high:.2f}</text>',
         f'<text x="8" y="{top_pad + price_h}" class="axis-label">{price_low:.2f}</text>',
-        f'<text x="8" y="{volume_top + 12}" class="axis-label">成交量</text>',
-        f'<text x="8" y="{oi_top + 12}" class="axis-label">持仓量</text>',
-        f'<line x1="{left_pad}" y1="{volume_top + volume_h}" x2="{width - right_pad}" y2="{volume_top + volume_h}" class="axis"/>',
-        f'<line x1="{left_pad}" y1="{oi_top + oi_h}" x2="{width - right_pad}" y2="{oi_top + oi_h}" class="axis"/>',
+        f'<line x1="{left_pad}" y1="{y(max_volume_high):.1f}" x2="{width - right_pad}" y2="{y(max_volume_high):.1f}" class="max-volume-line"/>',
+        f'<line x1="{left_pad}" y1="{y(max_volume_low):.1f}" x2="{width - right_pad}" y2="{y(max_volume_low):.1f}" class="max-volume-line"/>',
+        f'<text x="{width - right_pad - 220}" y="{y(max_volume_high) - 6:.1f}" class="max-volume-label">最大成交量K线高点 {max_volume_high:.2f}</text>',
+        f'<text x="{width - right_pad - 220}" y="{y(max_volume_low) + 16:.1f}" class="max-volume-label">最大成交量K线低点 {max_volume_low:.2f}</text>',
+        f'<text x="8" y="{sub_top + 12}" class="axis-label">成交量/持仓量</text>',
+        f'<line x1="{left_pad}" y1="{sub_top + sub_h}" x2="{width - right_pad}" y2="{sub_top + sub_h}" class="axis"/>',
     ]
     oi_points = []
     for idx, (_, row) in enumerate(data.iterrows()):
@@ -113,13 +121,13 @@ def kline_svg(frame: pd.DataFrame, width: int = 1100, height: int = 520) -> str:
         close = float(row["close"])
         volume = float(row["volume"])
         open_interest = float(row["open_interest"])
-        x = left_pad + idx * step + step / 2
+        x = x_at(idx)
         body_y = min(y(open_), y(close))
         body_h = max(2, abs(y(open_) - y(close)))
         cls = "up" if close >= open_ else "down"
         date_label = pd.to_datetime(row["datetime"]).strftime("%m-%d")
         vol_top = volume_y(volume)
-        vol_h = volume_top + volume_h - vol_top
+        vol_h = sub_top + sub_h - vol_top
         oi_points.append(f"{x:.1f},{oi_y(open_interest):.1f}")
         elements.extend([
             f'<line x1="{x:.1f}" y1="{y(high):.1f}" x2="{x:.1f}" y2="{y(low):.1f}" class="{cls} wick"/>',
@@ -129,6 +137,16 @@ def kline_svg(frame: pd.DataFrame, width: int = 1100, height: int = 520) -> str:
         label_step = max(1, len(data) // 8)
         if idx % label_step == 0 or idx == len(data) - 1:
             elements.append(f'<text x="{x:.1f}" y="{height - bottom_pad + 18}" class="date-label">{date_label}</text>')
+    high_pos = data.index.get_loc(high_row.name)
+    low_pos = data.index.get_loc(low_row.name)
+    high_x = x_at(high_pos)
+    low_x = x_at(low_pos)
+    elements.extend([
+        f'<circle cx="{high_x:.1f}" cy="{y(float(high_row["high"])):.1f}" r="4" class="price-marker"/>',
+        f'<text x="{high_x + 8:.1f}" y="{y(float(high_row["high"])) - 8:.1f}" class="price-label">高点 {float(high_row["high"]):.2f}</text>',
+        f'<circle cx="{low_x:.1f}" cy="{y(float(low_row["low"])):.1f}" r="4" class="price-marker"/>',
+        f'<text x="{low_x + 8:.1f}" y="{y(float(low_row["low"])) + 18:.1f}" class="price-label">低点 {float(low_row["low"]):.2f}</text>',
+    ])
     elements.append(f'<polyline points="{" ".join(oi_points)}" fill="none" class="oi-line"/>')
     elements.append("</svg>")
     return "".join(elements)
@@ -208,12 +226,15 @@ def render_html(reports, data: pd.DataFrame) -> str:
     .axis {{ stroke: #303846; stroke-width: 1; }}
     .axis-label, .date-label {{ fill: #8b949e; font-size: 12px; }}
     .date-label {{ text-anchor: middle; }}
-    .up.wick {{ stroke: #2fbf71; stroke-width: 2; }}
-    .down.wick {{ stroke: #ff5f56; stroke-width: 2; }}
-    .up.body {{ fill: #2fbf71; }}
-    .down.body {{ fill: #ff5f56; }}
+    .up.wick {{ stroke: #ff5f56; stroke-width: 2; }}
+    .down.wick {{ stroke: #2fbf71; stroke-width: 2; }}
+    .up.body {{ fill: #ff5f56; }}
+    .down.body {{ fill: #2fbf71; }}
     .volume-bar {{ fill: #607086; opacity: 0.78; }}
     .oi-line {{ stroke: #f2c94c; stroke-width: 2; }}
+    .price-marker {{ fill: #f2c94c; stroke: #0d1117; stroke-width: 2; }}
+    .price-label, .max-volume-label {{ fill: #e6edf3; font-size: 12px; font-weight: 600; }}
+    .max-volume-line {{ stroke: #f2c94c; stroke-width: 1.4; stroke-dasharray: 6 4; opacity: 0.88; }}
     .steps li {{ margin: 6px 0; }}
   </style>
 </head>
@@ -229,8 +250,9 @@ def render_html(reports, data: pd.DataFrame) -> str:
         <li>数据窗口：螺纹钢最近两个月真实日线数据。</li>
         <li>日线只描述日线自身的波动，周线由日线聚合后独立描述。</li>
         <li>价格用K线高点、低点、收盘位置描述波动规律。</li>
-        <li>成交量重点标出最近两个月最大成交量K线。</li>
-        <li>持仓量描述首尾变化以及多空参与状态。</li>
+        <li>成交量柱和持仓量线放在同一个区域显示。</li>
+        <li>K线图标出两个月高低点价格，并标出最大成交量K线的高低点。</li>
+        <li>K线颜色：红涨绿跌。</li>
       </ol>
     </section>
 
