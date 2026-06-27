@@ -45,6 +45,8 @@ def build():
     from audit_report import audit_items_to_frame, build_audit_items, has_simulated_data
     from portfolio_backtester import backtest_unified_portfolio
     from trade_decision import build_all_trade_decisions, decisions_to_dataframe
+    from objective_market_engine import analyze_all_objective_markets, reports_to_dataframe
+    from open_interest_sources import summarize_all_open_interest
     import strategy_structure as st_structure
 
     logger.info("加载数据 + 计算指标...")
@@ -60,6 +62,17 @@ def build():
     unified_portfolio = backtest_unified_portfolio(all_data_ind)
     trade_decisions = build_all_trade_decisions(all_data_ind, eligibility_snapshot=unified_portfolio.eligibility_snapshot)
     decision_df = decisions_to_dataframe(trade_decisions)
+    objective_reports = analyze_all_objective_markets(all_data_ind)
+    objective_df = reports_to_dataframe(objective_reports)
+    oi_df = summarize_all_open_interest(all_data_ind).rename(columns={
+        "symbol": "品种",
+        "available": "是否可用",
+        "source": "来源",
+        "latest_date": "日期",
+        "latest_open_interest": "最新持仓量",
+        "change_pct": "变化%",
+        "note": "说明",
+    })
     paper_report = run_paper_session(all_data_ind, st_structure.generate_signals, symbols=list(all_data_ind.keys()))
 
     # ── 渲染图表 ──
@@ -110,6 +123,8 @@ def build():
     summary_table = df_to_table(summary_df, "tbl")
     state_table = df_to_table(state_df, "tbl")
     decision_table = df_to_table(decision_df, "tbl")
+    objective_table = df_to_table(objective_df, "tbl")
+    oi_table = df_to_table(oi_df, "tbl")
     paper_account = paper_report.get("account", {})
     paper_positions = pd.DataFrame(paper_report.get("positions", []))
     paper_fills = pd.DataFrame(list(reversed(paper_report.get("fills", [])))[:30])
@@ -157,6 +172,8 @@ def build():
         kline_boxes="\n".join(kline_divs),
         detail_boxes="\n".join(detail_divs),
         options=options,
+        objective_table=objective_table,
+        oi_table=oi_table,
         decision_table=decision_table,
         summary_table=summary_table,
         state_table=state_table,
@@ -188,6 +205,7 @@ TEMPLATE = """<!DOCTYPE html>
   table.tbl{{width:100%;border-collapse:collapse;font-size:12px}}
   table.tbl th{{background:#0e1117;color:#aaa;padding:6px 8px;border:1px solid #2a2a3e;text-align:center}}
   table.tbl td{{padding:5px 8px;border:1px solid #2a2a3e;text-align:center;color:#ddd}}
+  .wide{{overflow-x:auto}}
   footer{{color:#555;font-size:12px;text-align:center;padding:20px}}
   .kline-row{{display:flex;gap:16px;flex-wrap:wrap}}
   .kline-col{{flex:1;min-width:480px}}
@@ -227,8 +245,18 @@ TEMPLATE = """<!DOCTYPE html>
   </div>
 
   <div class="card">
+    <h2>四维客观行情描述与下注计划</h2>
+    <div class="wide">{objective_table}</div>
+  </div>
+
+  <div class="card">
+    <h2>持仓量数据状态</h2>
+    <div class="wide">{oi_table}</div>
+  </div>
+
+  <div class="card">
     <h2>可执行交易决策</h2>
-    {decision_table}
+    <div class="wide">{decision_table}</div>
   </div>
 
   <div class="card">

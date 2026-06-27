@@ -20,6 +20,8 @@ from market_analyzer import AnalysisResult, get_detail_text, results_to_datafram
 from structure_analyzer import find_pivots
 from kline_density import choppiness_index, density_score_series
 from audit_report import audit_items_to_frame, build_audit_items, has_simulated_data
+from objective_market_engine import analyze_all_objective_markets, reports_to_dataframe
+from open_interest_sources import summarize_all_open_interest
 from trade_decision import build_all_trade_decisions, decisions_to_dataframe
 
 CARD = {"backgroundColor": "#161b27", "border": "1px solid #2a2a3e",
@@ -292,6 +294,7 @@ def create_app(
     paper_report: dict | None = None,
     trade_decisions: list | None = None,
     unified_portfolio = None,
+    objective_reports: list | None = None,
 ) -> dash.Dash:
     if dash is None or dbc is None:
         raise RuntimeError("缺少 Dash 依赖，请先运行: pip install -r requirements.txt")
@@ -315,6 +318,17 @@ def create_app(
         eligibility_snapshot=getattr(unified_portfolio, "eligibility_snapshot", {}),
     )
     decision_df = decisions_to_dataframe(trade_decisions)
+    objective_reports = objective_reports or analyze_all_objective_markets(all_data)
+    objective_df = reports_to_dataframe(objective_reports)
+    oi_df = summarize_all_open_interest(all_data).rename(columns={
+        "symbol": "品种",
+        "available": "是否可用",
+        "source": "来源",
+        "latest_date": "日期",
+        "latest_open_interest": "最新持仓量",
+        "change_pct": "变化%",
+        "note": "说明",
+    })
 
     # ── 状态徽章 ──
     def _badge(state):
@@ -372,6 +386,63 @@ def create_app(
                 html.Div("品种总数", style={"color": "#aaa", "fontWeight": "bold"}),
                 html.H4(str(len(all_results)), style={"color": "#aaa", "margin": "0"}),
             ], style={**CARD, "textAlign": "center"}), width=2),
+        ], className="mb-3"),
+
+        # ── 四维客观行情描述 ──
+        dbc.Row([
+            dbc.Col([
+                dbc.Card([
+                    html.H6("四维客观行情描述与下注计划", style={"color": "#26a69a", "marginBottom": "8px"}),
+                    dash_table.DataTable(
+                        columns=[{"name": c, "id": c} for c in objective_df.columns],
+                        data=objective_df.to_dict("records"),
+                        sort_action="native",
+                        filter_action="native",
+                        page_size=10,
+                        style_table={"overflowX": "auto"},
+                        style_cell={"backgroundColor": "#0e1117", "color": "#ccc",
+                                    "border": "1px solid #2a2a3e", "fontSize": "12px",
+                                    "padding": "5px 8px", "textAlign": "center",
+                                    "minWidth": "90px", "maxWidth": "260px",
+                                    "whiteSpace": "normal"},
+                        style_header={"backgroundColor": "#161b27", "fontWeight": "bold",
+                                      "color": "#aaa", "border": "1px solid #333"},
+                        style_data_conditional=[
+                            {"if": {"filter_query": "{等级} = A", "column_id": "等级"}, "color": "#26a69a", "fontWeight": "bold"},
+                            {"if": {"filter_query": "{等级} = B", "column_id": "等级"}, "color": "#FFD700", "fontWeight": "bold"},
+                            {"if": {"filter_query": "{动作} = WAIT", "column_id": "动作"}, "color": "#888"},
+                            {"if": {"filter_query": "{方向} = 多", "column_id": "方向"}, "color": "#26a69a"},
+                            {"if": {"filter_query": "{方向} = 空", "column_id": "方向"}, "color": "#ef5350"},
+                        ],
+                    ),
+                ], style=CARD),
+            ], width=12),
+        ], className="mb-3"),
+
+        # ── 持仓量数据状态 ──
+        dbc.Row([
+            dbc.Col([
+                dbc.Card([
+                    html.H6("持仓量数据状态", style={"color": "#26a69a", "marginBottom": "8px"}),
+                    dash_table.DataTable(
+                        columns=[{"name": c, "id": c} for c in oi_df.columns],
+                        data=oi_df.to_dict("records"),
+                        sort_action="native",
+                        filter_action="native",
+                        page_size=8,
+                        style_table={"overflowX": "auto"},
+                        style_cell={"backgroundColor": "#0e1117", "color": "#ccc",
+                                    "border": "1px solid #2a2a3e", "fontSize": "12px",
+                                    "padding": "5px 8px", "textAlign": "center"},
+                        style_header={"backgroundColor": "#161b27", "fontWeight": "bold",
+                                      "color": "#aaa", "border": "1px solid #333"},
+                        style_data_conditional=[
+                            {"if": {"filter_query": "{是否可用} = True", "column_id": "是否可用"}, "color": "#26a69a", "fontWeight": "bold"},
+                            {"if": {"filter_query": "{是否可用} = False", "column_id": "是否可用"}, "color": "#ef5350", "fontWeight": "bold"},
+                        ],
+                    ),
+                ], style=CARD),
+            ], width=12),
         ], className="mb-3"),
 
         # ── 可执行交易决策 ──

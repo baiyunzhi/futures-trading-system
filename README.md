@@ -8,9 +8,11 @@
 | 模块 | 文件 | 职责 |
 |------|------|------|
 | 数据获取 | `data_fetcher.py` | akshare 拉取主力合约日线，失败时自动生成仿真数据 |
+| 持仓量数据 | `open_interest_sources.py` | 总持仓量可用性检查、会员持仓排名查询 |
 | 技术指标 | `indicators.py` | MA / ATR / 布林带 / 等指标计算 |
 | 品种选择 | `variety_selector.py` | 多因子评分对品种排名，输出多空方向 |
 | 市场分析 | `market_analyzer.py` | 各品种市场状态、入场/止损/止盈位 |
+| 四维行情引擎 | `objective_market_engine.py` | 价格、成交量、持仓量、时间的客观描述与下注计划 |
 | 信号生成 | `signal_generator.py` | 交易信号 |
 | 风险管理 | `risk_manager.py` | 仓位与风险控制 |
 | 回测 | `backtester.py` | 组合历史回测，输出收益/胜率/夏普 |
@@ -30,6 +32,58 @@ python main.py
 # 3. 浏览器访问
 http://127.0.0.1:8050
 ```
+
+## 当前核心流程
+
+系统先描述行情，再决定是否下注：
+
+```text
+周线大环境
++ 日线主状态
++ 小时线触发条件
++ 价格结构
++ 成交量主动性
++ 持仓量持续性
++ 风险手数
+= 客观行情描述与下注计划
+```
+
+仪表板新增“四维客观行情描述与下注计划”表，直接输出：
+
+- 当下行情正在干什么
+- 方向是否明确
+- 持续性评分
+- 是否允许下注
+- 入场触发条件
+- 止损、1R、2R、建议手数
+
+详细规则见 `docs/objective_market_system.md`。
+
+## 持仓量数据
+
+已修复 akshare 日线字段映射：
+
+```text
+futures_zh_daily_sina 返回 hold
+系统映射为 open_interest
+四维行情引擎用 open_interest 判断持续性
+```
+
+可检查当前数据是否有持仓量：
+
+```bash
+python open_interest_sources.py
+```
+
+会员多空持仓排名需要真实合约代码：
+
+```python
+from open_interest_sources import fetch_sina_member_position_rank
+
+rank = fetch_sina_member_position_rank("RB2410", "2024-06-21")
+```
+
+`RB0` 这类主力连续代码适合日线行情，不适合会员持仓排名；排名数据要用 `RB2410`、`I2409` 这类具体合约。
 
 ## 生成静态网页版
 

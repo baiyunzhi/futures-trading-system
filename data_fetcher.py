@@ -35,6 +35,7 @@ _COL_MAP = {
     "date":  "date", "open":  "open",  "high":  "high",
     "low":   "low",  "close": "close", "volume": "volume",
     "open_interest": "open_interest",
+    "hold": "open_interest",
     # sina 格式
     "settle": "settle", "pre_settle": "pre_settle",
 }
@@ -216,7 +217,7 @@ def _is_cache_valid(path: Path) -> bool:
 def get_data(symbol: str, use_cache: bool = True) -> pd.DataFrame:
     """
     获取品种日线数据。
-    返回 DataFrame：date / open / high / low / close / volume
+    返回 DataFrame：date / open / high / low / close / volume / open_interest(若数据源提供)
     """
     path = _cache_path(symbol)
 

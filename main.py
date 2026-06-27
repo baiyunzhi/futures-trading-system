@@ -61,8 +61,24 @@ def main():
         logger.info(f"    {ALL_SYMBOLS.get(r.symbol, r.symbol):6s}  {r.state}  "
                     f"评分={r.score:.1f}  入场={r.entry}  止损={r.stop_loss}  止盈={r.target}")
 
-    # ── 5. 多策略回测 ──
-    logger.info("Step 5/5  纯结构策略回测...")
+    # ── 5. 客观行情描述与下注计划 ──
+    logger.info("Step 5/7  四维行情描述与下注计划...")
+    from objective_market_engine import analyze_all_objective_markets, reports_to_dataframe
+    objective_reports = analyze_all_objective_markets(all_data_ind)
+    objective_df = reports_to_dataframe(objective_reports)
+    logger.info("  当前最值得跟踪的品种：")
+    for report in objective_reports[:5]:
+        plan = report.bet_plan
+        daily = report.observations.get("日线")
+        daily_text = daily.description if daily and daily.available else "日线数据不足"
+        logger.info(
+            f"    {report.name:6s}  动作={plan.action}  方向={plan.direction}  "
+            f"等级={plan.grade}  手数={plan.lots}  {daily_text}"
+        )
+        logger.info(f"      触发: {plan.entry_trigger}；失效: {plan.invalidation}")
+
+    # ── 6. 多策略回测 ──
+    logger.info("Step 6/7  纯结构策略回测...")
     from backtester import backtest_portfolio
     from portfolio_backtester import backtest_unified_portfolio
     from trade_decision import build_all_trade_decisions
@@ -93,8 +109,8 @@ def main():
                 f"回撤={unified_portfolio.metrics.get('max_drawdown', 0):.2f}%  "
                 f"交易={unified_portfolio.metrics.get('total_trades', 0)}")
 
-    # ── 6. 本地模拟盘 ──
-    logger.info("Step 6/6  本地模拟盘回放...")
+    # ── 7. 本地模拟盘 ──
+    logger.info("Step 7/7  本地模拟盘回放...")
     from paper_trading import run_paper_session
     paper_report = run_paper_session(
         all_data_ind,
@@ -124,6 +140,7 @@ def main():
         paper_report     = paper_report,
         trade_decisions  = trade_decisions,
         unified_portfolio = unified_portfolio,
+        objective_reports = objective_reports,
     )
     app.run(debug=False, host="127.0.0.1", port=8050)
 
