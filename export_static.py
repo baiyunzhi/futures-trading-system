@@ -223,6 +223,16 @@ TEMPLATE = """<!DOCTYPE html>
   <div class="note">最后更新：{updated} ｜ {data_note} 仅供学习研究，不构成投资建议。</div>
 
   <div class="card">
+    <h2>四维客观行情描述与下注计划</h2>
+    <div class="wide">{objective_table}</div>
+  </div>
+
+  <div class="card">
+    <h2>持仓量数据状态</h2>
+    <div class="wide">{oi_table}</div>
+  </div>
+
+  <div class="card">
     <h2>品种综合评分排行</h2>
     {heatmap}
   </div>
@@ -242,16 +252,6 @@ TEMPLATE = """<!DOCTYPE html>
         {detail_boxes}
       </div>
     </div>
-  </div>
-
-  <div class="card">
-    <h2>四维客观行情描述与下注计划</h2>
-    <div class="wide">{objective_table}</div>
-  </div>
-
-  <div class="card">
-    <h2>持仓量数据状态</h2>
-    <div class="wide">{oi_table}</div>
   </div>
 
   <div class="card">
