@@ -4,11 +4,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from market_system import SYMBOLS, TIMEFRAMES, analyze_market, build_timeframes, load_or_create_data
+from market_system import SYMBOLS, TIMEFRAMES, analyze_market, build_timeframes, load_market_data
 
 
 ROOT = Path(__file__).resolve().parent
-DATA_PATH = ROOT / "rb_recent_daily.csv"
+DAILY_DATA_PATH = ROOT / "rb_recent_daily.csv"
+HOURLY_DATA_PATH = ROOT / "rb_recent_hourly.csv"
 WEB_PATH = ROOT / "web" / "index.html"
 
 
@@ -17,14 +18,16 @@ def td(value: object, cls: str = "") -> str:
     return f"<td{klass}>{value}</td>"
 
 
-def build_timeframe_sections(reports, data: pd.DataFrame) -> str:
+def build_timeframe_sections(reports, data: dict[str, pd.DataFrame]) -> str:
     blocks = []
     reports_by_symbol = {report.symbol: report for report in reports}
     for symbol, meta in SYMBOLS.items():
         report = reports_by_symbol.get(symbol)
         if report is None:
             continue
-        frames = build_timeframes(data[data["symbol"] == symbol])
+        daily = data["daily"]
+        hourly = data["hourly"]
+        frames = build_timeframes(daily[daily["symbol"] == symbol], hourly[hourly["symbol"] == symbol])
         for timeframe in TIMEFRAMES:
             frame = frames[timeframe].copy()
             view = report.views[timeframe]
@@ -158,7 +161,7 @@ def table(headers: list[str], rows: list[str]) -> str:
     return f'<div class="table-wrap"><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>'
 
 
-def render_html(reports, data: pd.DataFrame) -> str:
+def render_html(reports, data: dict[str, pd.DataFrame]) -> str:
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -241,14 +244,14 @@ def render_html(reports, data: pd.DataFrame) -> str:
 <body>
   <header>
     <h1>螺纹钢最近两个月四维行情描述</h1>
-    <p class="note">螺纹钢最近两个月真实数据。日线和周线分别独立描述，只落地K线、成交量、持仓量、时间周期四个维度。</p>
+    <p class="note">螺纹钢最近两个月真实数据。日线、周线、小时线分别独立描述，只落地K线、成交量、持仓量、时间周期四个维度。</p>
   </header>
   <main>
     <section class="card">
       <h2>一步一步的流程</h2>
       <ol class="steps">
-        <li>数据窗口：螺纹钢最近两个月真实日线数据。</li>
-        <li>日线只描述日线自身的波动，周线由日线聚合后独立描述。</li>
+        <li>数据窗口：螺纹钢最近两个月真实日线和小时线数据。</li>
+        <li>日线、周线、小时线分别独立描述，周线由日线聚合。</li>
         <li>价格用K线高点、低点、收盘位置描述波动规律。</li>
         <li>成交量柱和持仓量线放在同一个区域显示。</li>
         <li>K线图标出两个月高低点价格，并标出最大成交量K线的高低点。</li>
@@ -264,7 +267,7 @@ def render_html(reports, data: pd.DataFrame) -> str:
 
 
 def main() -> None:
-    data = load_or_create_data(DATA_PATH)
+    data = load_market_data(DAILY_DATA_PATH, HOURLY_DATA_PATH)
     reports = analyze_market(data)
     WEB_PATH.parent.mkdir(parents=True, exist_ok=True)
     WEB_PATH.write_text(render_html(reports, data), encoding="utf-8")

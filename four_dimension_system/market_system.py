@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 
-TIMEFRAMES = ("日线", "周线")
+TIMEFRAMES = ("日线", "周线", "小时线")
 
 SYMBOLS = {
     "RB0": {"name": "螺纹钢", "multiplier": 10},
@@ -36,6 +36,17 @@ def load_or_create_data(path: Path) -> pd.DataFrame:
     return _normalize_data(pd.read_csv(path))
 
 
+def load_market_data(daily_path: Path, hourly_path: Path) -> dict[str, pd.DataFrame]:
+    if not daily_path.exists():
+        raise FileNotFoundError(f"缺少螺纹钢最近两个月日线数据文件: {daily_path}")
+    if not hourly_path.exists():
+        raise FileNotFoundError(f"缺少螺纹钢最近两个月小时线数据文件: {hourly_path}")
+    return {
+        "daily": _normalize_data(pd.read_csv(daily_path)),
+        "hourly": _normalize_data(pd.read_csv(hourly_path)),
+    }
+
+
 def _normalize_data(df: pd.DataFrame) -> pd.DataFrame:
     if "date" in df.columns and "datetime" not in df.columns:
         df = df.rename(columns={"date": "datetime"})
@@ -53,8 +64,8 @@ def _normalize_data(df: pd.DataFrame) -> pd.DataFrame:
     return out.sort_values(["symbol", "datetime"]).reset_index(drop=True)
 
 
-def build_timeframes(symbol_df: pd.DataFrame) -> dict[str, pd.DataFrame]:
-    indexed = symbol_df.set_index("datetime").sort_index()
+def build_timeframes(symbol_daily_df: pd.DataFrame, symbol_hourly_df: pd.DataFrame | None = None) -> dict[str, pd.DataFrame]:
+    indexed = symbol_daily_df.set_index("datetime").sort_index()
     agg = {
         "open": "first",
         "high": "max",
@@ -63,10 +74,13 @@ def build_timeframes(symbol_df: pd.DataFrame) -> dict[str, pd.DataFrame]:
         "volume": "sum",
         "open_interest": "last",
     }
-    return {
+    frames = {
         "周线": indexed.resample("W-FRI").agg(agg).dropna().reset_index(),
         "日线": indexed.reset_index(),
     }
+    if symbol_hourly_df is not None and not symbol_hourly_df.empty:
+        frames["小时线"] = symbol_hourly_df.sort_values("datetime").reset_index(drop=True)
+    return frames
 
 
 def combine_view(timeframe: str, frame: pd.DataFrame) -> TimeframeView:
@@ -179,14 +193,20 @@ def format_dt(value: object) -> str:
     return pd.to_datetime(value).strftime("%Y-%m-%d %H:%M")
 
 
-def analyze_market(data: pd.DataFrame) -> list[MarketReport]:
+def analyze_market(data: dict[str, pd.DataFrame] | pd.DataFrame) -> list[MarketReport]:
     reports: list[MarketReport] = []
-    clean = _normalize_data(data)
+    if isinstance(data, dict):
+        daily = _normalize_data(data["daily"])
+        hourly = _normalize_data(data["hourly"])
+    else:
+        daily = _normalize_data(data)
+        hourly = pd.DataFrame()
     for symbol, meta in SYMBOLS.items():
-        symbol_df = clean[clean["symbol"] == symbol]
-        if symbol_df.empty:
+        symbol_daily_df = daily[daily["symbol"] == symbol]
+        symbol_hourly_df = hourly[hourly["symbol"] == symbol] if not hourly.empty else None
+        if symbol_daily_df.empty:
             continue
-        frames = build_timeframes(symbol_df)
+        frames = build_timeframes(symbol_daily_df, symbol_hourly_df)
         views = {name: combine_view(name, frame) for name, frame in frames.items() if len(frame) >= 5}
         if set(TIMEFRAMES).issubset(views):
             story = "；".join(views[name].summary for name in TIMEFRAMES)
