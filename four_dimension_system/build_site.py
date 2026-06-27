@@ -17,46 +17,6 @@ def td(value: object, cls: str = "") -> str:
     return f"<td{klass}>{value}</td>"
 
 
-def badge(text: str) -> str:
-    cls = {
-        "BET": "good",
-        "PLAN": "warn",
-        "WAIT": "muted",
-        "多": "good",
-        "空": "bad",
-        "观望": "muted",
-        "A": "good",
-        "B": "warn",
-        "观察": "muted",
-    }.get(str(text), "")
-    return f'<span class="badge {cls}">{text}</span>'
-
-
-def build_plan_table(reports) -> str:
-    headers = ["品种", "动作", "方向", "等级", "触发条件", "入场", "止损", "1R", "2R", "风险", "手数", "失效", "原因"]
-    rows = []
-    for report in reports:
-        plan = report.bet_plan
-        rows.append(
-            "<tr>"
-            + td(f"{report.name}({report.symbol})")
-            + td(badge(plan.action))
-            + td(badge(plan.direction))
-            + td(badge(plan.grade))
-            + td(plan.trigger, "left")
-            + td(plan.entry)
-            + td(plan.stop)
-            + td(plan.target_1r)
-            + td(plan.target_2r)
-            + td(f"{plan.risk_pct:.1%}")
-            + td(plan.lots)
-            + td(plan.invalidation, "left")
-            + td(plan.reason, "left")
-            + "</tr>"
-        )
-    return table(headers, rows)
-
-
 def build_matrix_table(reports) -> str:
     headers = ["品种", "周期", *DIMENSIONS, "周期结论"]
     rows = []
@@ -85,15 +45,16 @@ def dim_cell(view) -> str:
 def build_story_cards(reports) -> str:
     cards = []
     for report in reports:
-        cards.append(
-            f"""
-            <section class="card story">
-              <h3>{report.name}({report.symbol})</h3>
-              <p>{report.story}</p>
-              <p><b>下注判断：</b>{report.bet_plan.reason}</p>
-            </section>
-            """
-        )
+        for timeframe in TIMEFRAMES:
+            view = report.views[timeframe]
+            cards.append(
+                f"""
+                <section class="card story">
+                  <h3>{report.name}({report.symbol}) · {timeframe}</h3>
+                  <p>{view.summary}</p>
+                </section>
+                """
+            )
     return "\n".join(cards)
 
 
@@ -113,6 +74,37 @@ def build_chart_section(data: pd.DataFrame) -> str:
     return "\n".join(blocks)
 
 
+def build_kline_tables(data: pd.DataFrame) -> str:
+    blocks = []
+    for symbol, meta in SYMBOLS.items():
+        frames = build_timeframes(data[data["symbol"] == symbol])
+        for timeframe in TIMEFRAMES:
+            frame = frames[timeframe].tail(12).copy()
+            rows = []
+            for _, row in frame.iterrows():
+                dt = pd.to_datetime(row["datetime"]).strftime("%Y-%m-%d %H:%M")
+                rows.append(
+                    "<tr>"
+                    + td(dt)
+                    + td(row["open"])
+                    + td(row["high"])
+                    + td(row["low"])
+                    + td(row["close"])
+                    + td(int(row["volume"]))
+                    + td(int(row["open_interest"]))
+                    + "</tr>"
+                )
+            blocks.append(
+                f"""
+                <section class="card">
+                  <h2>{meta["name"]}({symbol}) · {timeframe}K线数据</h2>
+                  {table(["时间", "开盘", "高点", "低点", "收盘", "成交量", "持仓量"], rows)}
+                </section>
+                """
+            )
+    return "\n".join(blocks)
+
+
 def table(headers: list[str], rows: list[str]) -> str:
     head = "".join(f"<th>{header}</th>" for header in headers)
     body = "".join(rows)
@@ -125,7 +117,7 @@ def render_html(reports, data: pd.DataFrame) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>四维三周期客观行情系统</title>
+  <title>螺纹钢三周期客观行情描述</title>
   <style>
     :root {{
       color-scheme: dark;
@@ -187,14 +179,6 @@ def render_html(reports, data: pd.DataFrame) -> str:
     .bad {{ color: var(--bad); }}
     .warn {{ color: var(--warn); }}
     .muted {{ color: var(--muted); }}
-    .badge {{
-      display: inline-block;
-      min-width: 44px;
-      padding: 2px 8px;
-      border-radius: 999px;
-      border: 1px solid var(--line);
-      background: #11161e;
-    }}
     .spark {{
       width: 100%;
       height: 120px;
@@ -207,24 +191,19 @@ def render_html(reports, data: pd.DataFrame) -> str:
 </head>
 <body>
   <header>
-    <h1>四维三周期客观行情系统</h1>
-    <p class="note">只使用价格、成交量、持仓量、时间。三个周期：周线、日线、小时线。不加入其他指标。</p>
+    <h1>螺纹钢三周期客观行情描述</h1>
+    <p class="note">周线、日线、小时线分别独立观察，不互相作为判断依据。只描述价格高低点、成交量、持仓量和时间节奏。</p>
   </header>
   <main>
     <section class="card">
       <h2>一步一步的流程</h2>
       <ol class="steps">
-        <li>先看周线：只判断大环境，不下注。</li>
-        <li>再看日线：确定当下行情是突破、区间上沿、区间下沿，还是中部震荡。</li>
-        <li>最后看小时线：只有小时线触发，才允许执行下注。</li>
-        <li>下注前必须确认四个维度：价格方向、成交量主动性、持仓量持续性、时间节奏。</li>
-        <li>先确定失效价，再计算手数；没有触发就只做计划，不提前预测。</li>
+        <li>周线只描述周线自身的波动，不影响日线和小时线。</li>
+        <li>日线只描述日线自身的波动，不把周线当作判断依据。</li>
+        <li>小时线只描述小时线自身的波动。</li>
+        <li>价格用K线高点、低点、收盘位置描述波动规律。</li>
+        <li>成交量和持仓量用来描述多空双方态度和波动持续性。</li>
       </ol>
-    </section>
-
-    <section class="card">
-      <h2>下注计划</h2>
-      {build_plan_table(reports)}
     </section>
 
     <section class="card">
@@ -239,6 +218,8 @@ def render_html(reports, data: pd.DataFrame) -> str:
     <section class="grid">
       {build_chart_section(data)}
     </section>
+
+    {build_kline_tables(data)}
   </main>
 </body>
 </html>

@@ -13,8 +13,6 @@ DIMENSIONS = ("价格", "成交量", "持仓量", "时间")
 
 SYMBOLS = {
     "RB0": {"name": "螺纹钢", "multiplier": 10},
-    "CU0": {"name": "铜", "multiplier": 5},
-    "M0": {"name": "豆粕", "multiplier": 10},
 }
 
 
@@ -41,28 +39,11 @@ class TimeframeView:
 
 
 @dataclass(frozen=True)
-class BetPlan:
-    action: str
-    direction: str
-    grade: str
-    trigger: str
-    entry: float
-    stop: float
-    target_1r: float
-    target_2r: float
-    risk_pct: float
-    lots: int
-    invalidation: str
-    reason: str
-
-
-@dataclass(frozen=True)
 class MarketReport:
     symbol: str
     name: str
     views: dict[str, TimeframeView]
     story: str
-    bet_plan: BetPlan
 
 
 def load_or_create_data(path: Path) -> pd.DataFrame:
@@ -78,11 +59,7 @@ def create_sample_hourly_data() -> pd.DataFrame:
     rows: list[dict] = []
     start = datetime(2026, 3, 2, 9)
     hours = [9, 10, 11, 13, 14]
-    configs = {
-        "RB0": {"base": 3450, "trend": -1.8, "amp": 18, "oi": 820000},
-        "CU0": {"base": 78500, "trend": 42, "amp": 360, "oi": 610000},
-        "M0": {"base": 3120, "trend": 1.2, "amp": 24, "oi": 940000},
-    }
+    configs = {"RB0": {"base": 3450, "trend": -1.8, "amp": 18, "oi": 820000}}
 
     for symbol, cfg in configs.items():
         step = 0
@@ -227,7 +204,7 @@ def combine_view(timeframe: str, frame: pd.DataFrame) -> TimeframeView:
     score = _bias_score([price.bias, volume.bias, open_interest.bias])
     bias = price.bias
     latest = frame.iloc[-1]
-    summary = f"{timeframe}: {price.state}，{volume.state}，{open_interest.state}，{time.state}"
+    summary = build_objective_summary(timeframe, frame, price, volume, open_interest, time)
     return TimeframeView(
         timeframe=timeframe,
         price=price,
@@ -253,84 +230,42 @@ def _bias_score(items: list[str]) -> int:
     return score
 
 
-def build_bet_plan(symbol: str, views: dict[str, TimeframeView]) -> BetPlan:
-    weekly = views["周线"]
-    daily = views["日线"]
-    hourly = views["小时线"]
-    direction = "观望"
-    if weekly.bias == daily.bias == "bull":
-        direction = "多"
-    elif weekly.bias == daily.bias == "bear":
-        direction = "空"
-
-    latest = hourly.close
-    multiplier = SYMBOLS[symbol]["multiplier"]
-    capital = 500000
-    risk_pct = 0.0
-    action = "WAIT"
-    grade = "观察"
-    reason = "周线、日线、小时线未形成同向确认"
-
-    if direction == "多":
-        trigger_price = max(daily.high, hourly.high)
-        stop = min(daily.low, hourly.low)
-        risk = max(0.01, trigger_price - stop)
-        target_1r = trigger_price + risk
-        target_2r = trigger_price + 2 * risk
-        trigger = f"小时线收盘突破 {trigger_price:.2f}，且成交量不缩、持仓量不减"
-        invalidation = f"跌回 {stop:.2f} 下方"
-    elif direction == "空":
-        trigger_price = min(daily.low, hourly.low)
-        stop = max(daily.high, hourly.high)
-        risk = max(0.01, stop - trigger_price)
-        target_1r = trigger_price - risk
-        target_2r = trigger_price - 2 * risk
-        trigger = f"小时线收盘跌破 {trigger_price:.2f}，且成交量不缩、持仓量不减"
-        invalidation = f"重新站回 {stop:.2f} 上方"
-    else:
-        return BetPlan("WAIT", direction, grade, "等待三周期方向一致", latest, 0, 0, 0, 0, 0, "方向未确认", reason)
-
-    expected = "bull" if direction == "多" else "bear"
-    supports = [
-        hourly.volume.bias in (expected, "neutral"),
-        hourly.open_interest.bias in (expected, "neutral"),
-        daily.volume.bias in (expected, "neutral"),
-        daily.open_interest.bias in (expected, "neutral"),
-    ]
-    strong_support = hourly.volume.bias == expected and hourly.open_interest.bias == expected
-
-    if hourly.bias == expected and all(supports) and strong_support:
-        action = "BET"
-        grade = "A"
-        risk_pct = 0.01
-        reason = "周线、日线、小时线同向，且四维度支持当前方向"
-    elif hourly.bias == expected and all(supports):
-        action = "PLAN"
-        grade = "B"
-        risk_pct = 0.005
-        reason = "价格三周期同向，成交量和持仓量未反对，等待放量或增仓后升级为下注"
-    else:
-        action = "WAIT"
-        grade = "观察"
-        risk_pct = 0.0
-        reason = "周线和日线同向，但小时线尚未触发"
-
-    risk_amount = capital * risk_pct
-    lots = int(risk_amount / (risk * multiplier)) if risk > 0 else 0
-    return BetPlan(
-        action=action,
-        direction=direction,
-        grade=grade,
-        trigger=trigger,
-        entry=round(trigger_price, 2),
-        stop=round(stop, 2),
-        target_1r=round(target_1r, 2),
-        target_2r=round(target_2r, 2),
-        risk_pct=risk_pct,
-        lots=max(0, lots),
-        invalidation=invalidation,
-        reason=reason,
+def build_objective_summary(
+    timeframe: str,
+    frame: pd.DataFrame,
+    price: DimensionView,
+    volume: DimensionView,
+    open_interest: DimensionView,
+    time: DimensionView,
+) -> str:
+    latest = frame.iloc[-1]
+    history = frame.iloc[:-1].tail(20)
+    recent_high = float(history["high"].max()) if not history.empty else float(latest["high"])
+    recent_low = float(history["low"].min()) if not history.empty else float(latest["low"])
+    latest_high = float(latest["high"])
+    latest_low = float(latest["low"])
+    latest_close = float(latest["close"])
+    latest_range = latest_high - latest_low
+    volume_text = _attitude_text(volume, open_interest)
+    return (
+        f"{timeframe}独立观察：最新收盘 {latest_close:.2f}，K线高点 {latest_high:.2f}、低点 {latest_low:.2f}。"
+        f"近20根高点 {recent_high:.2f}、低点 {recent_low:.2f}，当前价格表现为{price.state}。"
+        f"本周期单根波动 {latest_range:.2f}，时间节奏为{time.state}。"
+        f"成交量表现为{volume.state}，持仓量表现为{open_interest.state}。"
+        f"{volume_text}"
     )
+
+
+def _attitude_text(volume: DimensionView, open_interest: DimensionView) -> str:
+    if volume.bias == "bull" and open_interest.bias == "bull":
+        return "成交量和持仓量共同显示多方主动增加，行情上行波动的持续性较强。"
+    if volume.bias == "bear" and open_interest.bias == "bear":
+        return "成交量和持仓量共同显示空方主动增加，行情下行波动的持续性较强。"
+    if open_interest.state == "减仓":
+        return "持仓量下降，说明当前波动更多来自离场或减仓，持续性需要降低评价。"
+    if volume.state == "缩量":
+        return "成交量收缩，说明当前价格波动缺少主动成交推动。"
+    return "成交量和持仓量没有形成明显单边态度，当前波动暂未显示持续性增强。"
 
 
 def analyze_market(data: pd.DataFrame) -> list[MarketReport]:
@@ -343,11 +278,9 @@ def analyze_market(data: pd.DataFrame) -> list[MarketReport]:
         frames = build_timeframes(symbol_df)
         views = {name: combine_view(name, frame) for name, frame in frames.items() if len(frame) >= 5}
         if set(TIMEFRAMES).issubset(views):
-            plan = build_bet_plan(symbol, views)
             story = "；".join(views[name].summary for name in TIMEFRAMES)
-            reports.append(MarketReport(symbol, meta["name"], views, story, plan))
-    order = {"BET": 3, "PLAN": 2, "WAIT": 1}
-    return sorted(reports, key=lambda item: (order.get(item.bet_plan.action, 0), item.bet_plan.grade), reverse=True)
+            reports.append(MarketReport(symbol, meta["name"], views, story))
+    return reports
 
 
 def sparkline_svg(frame: pd.DataFrame, width: int = 520, height: int = 120) -> str:
