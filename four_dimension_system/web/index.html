@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>四维三周期客观行情系统</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0d10;
+      --panel: #151922;
+      --panel2: #10141b;
+      --line: #2b3240;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --good: #2fbf71;
+      --bad: #ff5f56;
+      --warn: #f2c94c;
+      --blue: #4cc9f0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+      line-height: 1.55;
+    }
+    header {
+      padding: 24px 28px 10px;
+      border-bottom: 1px solid var(--line);
+      background: #0f131a;
+    }
+    h1 { margin: 0 0 8px; font-size: 24px; }
+    h2 { margin: 0 0 14px; font-size: 18px; }
+    h3 { margin: 0 0 8px; font-size: 15px; }
+    main { padding: 18px 28px 40px; }
+    .note { color: var(--muted); margin: 0; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 14px;
+    }
+    .story p { margin: 8px 0 0; color: #c9d1d9; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 980px; }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      text-align: center;
+      vertical-align: top;
+      font-size: 13px;
+    }
+    th { background: var(--panel2); color: #c9d1d9; }
+    td.left { text-align: left; min-width: 180px; }
+    small { color: var(--muted); }
+    .good { color: var(--good); }
+    .bad { color: var(--bad); }
+    .warn { color: var(--warn); }
+    .muted { color: var(--muted); }
+    .badge {
+      display: inline-block;
+      min-width: 44px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #11161e;
+    }
+    .spark {
+      width: 100%;
+      height: 120px;
+      background: #0d1117;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+    .steps li { margin: 6px 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>四维三周期客观行情系统</h1>
+    <p class="note">只使用价格、成交量、持仓量、时间。三个周期：周线、日线、小时线。不加入其他指标。</p>
+  </header>
+  <main>
+    <section class="card">
+      <h2>一步一步的流程</h2>
+      <ol class="steps">
+        <li>先看周线：只判断大环境，不下注。</li>
+        <li>再看日线：确定当下行情是突破、区间上沿、区间下沿，还是中部震荡。</li>
+        <li>最后看小时线：只有小时线触发，才允许执行下注。</li>
+        <li>下注前必须确认四个维度：价格方向、成交量主动性、持仓量持续性、时间节奏。</li>
+        <li>先确定失效价，再计算手数；没有触发就只做计划，不提前预测。</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>下注计划</h2>
+      <div class="table-wrap"><table><thead><tr><th>品种</th><th>动作</th><th>方向</th><th>等级</th><th>触发条件</th><th>入场</th><th>止损</th><th>1R</th><th>2R</th><th>风险</th><th>手数</th><th>失效</th><th>原因</th></tr></thead><tbody><tr><td>铜(CU0)</td><td><span class="badge warn">PLAN</span></td><td><span class="badge good">多</span></td><td><span class="badge warn">B</span></td><td class="left">小时线收盘突破 81710.89，且成交量不缩、持仓量不减</td><td>81710.89</td><td>81367.52</td><td>82054.26</td><td>82397.63</td><td>0.5%</td><td>1</td><td class="left">跌回 81367.52 下方</td><td class="left">价格三周期同向，成交量和持仓量未反对，等待放量或增仓后升级为下注</td></tr><tr><td>豆粕(M0)</td><td><span class="badge warn">PLAN</span></td><td><span class="badge good">多</span></td><td><span class="badge warn">B</span></td><td class="left">小时线收盘突破 3231.62，且成交量不缩、持仓量不减</td><td>3231.62</td><td>3207.49</td><td>3255.75</td><td>3279.88</td><td>0.5%</td><td>10</td><td class="left">跌回 3207.49 下方</td><td class="left">价格三周期同向，成交量和持仓量未反对，等待放量或增仓后升级为下注</td></tr><tr><td>螺纹钢(RB0)</td><td><span class="badge muted">WAIT</span></td><td><span class="badge muted">观望</span></td><td><span class="badge muted">观察</span></td><td class="left">等待三周期方向一致</td><td>3348.74</td><td>0</td><td>0</td><td>0</td><td>0.0%</td><td>0</td><td class="left">方向未确认</td><td class="left">周线、日线、小时线未形成同向确认</td></tr></tbody></table></div>
+    </section>
+
+    <section class="card">
+      <h2>三周期 × 四维度行情矩阵</h2>
+      <div class="table-wrap"><table><thead><tr><th>品种</th><th>周期</th><th>价格</th><th>成交量</th><th>持仓量</th><th>时间</th><th>周期结论</th></tr></thead><tbody><tr><td>铜(CU0)</td><td>周线</td><td class="left"><b class="good">向上突破</b><br><small>收盘 81529.27 高于前区间高点 81334.86</small></td><td class="left"><b class="muted">量能平稳</b><br><small>成交量为中位数 1.02 倍</small></td><td class="left"><b class="muted">减仓</b><br><small>持仓量变化 -0.55%</small></td><td class="left"><b class="muted">波动扩张</b><br><small>周线波动为中位数 1.37 倍</small></td><td class="left">周线: 向上突破，量能平稳，减仓，波动扩张</td></tr><tr><td>铜(CU0)</td><td>日线</td><td class="left"><b class="good">区间上沿</b><br><small>价格位于近20根区间上部 88%</small></td><td class="left"><b class="muted">量能平稳</b><br><small>成交量为中位数 1.20 倍</small></td><td class="left"><b class="muted">持仓平稳</b><br><small>持仓量变化 -0.02%</small></td><td class="left"><b class="muted">节奏平稳</b><br><small>日线波动为中位数 0.79 倍</small></td><td class="left">日线: 区间上沿，量能平稳，持仓平稳，节奏平稳</td></tr><tr><td>铜(CU0)</td><td>小时线</td><td class="left"><b class="good">区间上沿</b><br><small>价格位于近20根区间上部 81%</small></td><td class="left"><b class="muted">量能平稳</b><br><small>成交量为中位数 1.05 倍</small></td><td class="left"><b class="muted">持仓平稳</b><br><small>持仓量变化 +0.01%</small></td><td class="left"><b class="muted">节奏平稳</b><br><small>小时线波动为中位数 0.92 倍</small></td><td class="left">小时线: 区间上沿，量能平稳，持仓平稳，节奏平稳</td></tr><tr><td>豆粕(M0)</td><td>周线</td><td class="left"><b class="good">区间上沿</b><br><small>价格位于近20根区间上部 98%</small></td><td class="left"><b class="muted">量能平稳</b><br><small>成交量为中位数 1.02 倍</small></td><td class="left"><b class="muted">持仓平稳</b><br><small>持仓量变化 -0.38%</small></td><td class="left"><b class="muted">节奏平稳</b><br><small>周线波动为中位数 1.16 倍</small></td><td class="left">周线: 区间上沿，量能平稳，持仓平稳，节奏平稳</td></tr><tr><td>豆粕(M0)</td><td>日线</td><td class="left"><b class="good">区间上沿</b><br><small>价格位于近20根区间上部 83%</small></td><td class="left"><b class="muted">量能平稳</b><br><small>成交量为中位数 1.20 倍</small></td><td class="left"><b class="muted">持仓平稳</b><br><small>持仓量变化 -0.02%</small></td><td class="left"><b class="muted">节奏平稳</b><br><small>日线波动为中位数 0.82 倍</small></td><td class="left">日线: 区间上沿，量能平稳，持仓平稳，节奏平稳</td></tr><tr><td>豆粕(M0)</td><td>小时线</td><td class="left"><b class="good">区间上沿</b><br><small>价格位于近20根区间上部 77%</small></td><td class="left"><b class="muted">量能平稳</b><br><small>成交量为中位数 1.05 倍</small></td><td class="left"><b class="muted">持仓平稳</b><br><small>持仓量变化 +0.00%</small></td><td class="left"><b class="muted">节奏平稳</b><br><small>小时线波动为中位数 0.92 倍</small></td><td class="left">小时线: 区间上沿，量能平稳，持仓平稳，节奏平稳</td></tr><tr><td>螺纹钢(RB0)</td><td>周线</td><td class="left"><b class="bad">区间下沿</b><br><small>价格位于近20根区间下部 21%</small></td><td class="left"><b class="muted">量能平稳</b><br><small>成交量为中位数 1.02 倍</small></td><td class="left"><b class="muted">减仓</b><br><small>持仓量变化 -1.99%</small></td><td class="left"><b class="muted">节奏平稳</b><br><small>周线波动为中位数 0.97 倍</small></td><td class="left">周线: 区间下沿，量能平稳，减仓，节奏平稳</td></tr><tr><td>螺纹钢(RB0)</td><td>日线</td><td class="left"><b class="muted">区间中部</b><br><small>价格位于近20根区间中部 42%</small></td><td class="left"><b class="muted">量能平稳</b><br><small>成交量为中位数 1.20 倍</small></td><td class="left"><b class="muted">持仓平稳</b><br><small>持仓量变化 -0.33%</small></td><td class="left"><b class="muted">节奏平稳</b><br><small>日线波动为中位数 0.90 倍</small></td><td class="left">日线: 区间中部，量能平稳，持仓平稳，节奏平稳</td></tr><tr><td>螺纹钢(RB0)</td><td>小时线</td><td class="left"><b class="muted">区间中部</b><br><small>价格位于近20根区间中部 65%</small></td><td class="left"><b class="muted">量能平稳</b><br><small>成交量为中位数 1.05 倍</small></td><td class="left"><b class="muted">持仓平稳</b><br><small>持仓量变化 -0.05%</small></td><td class="left"><b class="muted">节奏平稳</b><br><small>小时线波动为中位数 0.92 倍</small></td><td class="left">小时线: 区间中部，量能平稳，持仓平稳，节奏平稳</td></tr></tbody></table></div>
+    </section>
+
+    <section class="grid">
+      
+            <section class="card story">
+              <h3>铜(CU0)</h3>
+              <p>周线: 向上突破，量能平稳，减仓，波动扩张；日线: 区间上沿，量能平稳，持仓平稳，节奏平稳；小时线: 区间上沿，量能平稳，持仓平稳，节奏平稳</p>
+              <p><b>下注判断：</b>价格三周期同向，成交量和持仓量未反对，等待放量或增仓后升级为下注</p>
+            </section>
+            
+
+            <section class="card story">
+              <h3>豆粕(M0)</h3>
+              <p>周线: 区间上沿，量能平稳，持仓平稳，节奏平稳；日线: 区间上沿，量能平稳，持仓平稳，节奏平稳；小时线: 区间上沿，量能平稳，持仓平稳，节奏平稳</p>
+              <p><b>下注判断：</b>价格三周期同向，成交量和持仓量未反对，等待放量或增仓后升级为下注</p>
+            </section>
+            
+
+            <section class="card story">
+              <h3>螺纹钢(RB0)</h3>
+              <p>周线: 区间下沿，量能平稳，减仓，节奏平稳；日线: 区间中部，量能平稳，持仓平稳，节奏平稳；小时线: 区间中部，量能平稳，持仓平稳，节奏平稳</p>
+              <p><b>下注判断：</b>周线、日线、小时线未形成同向确认</p>
+            </section>
+            
+    </section>
+
+    <section class="grid">
+      
+            <section class="card chart-card">
+              <h3>螺纹钢(RB0) 小时收盘路径</h3>
+              <svg viewBox="0 0 520 120" class="spark"><polyline points="0.0,39.8 6.6,44.6 13.2,49.2 19.7,53.4 26.3,57.5 32.9,61.4 39.5,65.0 46.1,68.2 52.7,71.0 59.2,73.1 65.8,74.4 72.4,74.6 79.0,73.7 85.6,71.6 92.2,68.2 98.7,63.6 105.3,57.9 111.9,51.3 118.5,44.1 125.1,36.5 131.6,29.1 138.2,22.0 144.8,15.5 151.4,10.0 158.0,5.6 164.6,2.5 171.1,0.6 177.7,0.0 184.3,0.5 190.9,2.0 197.5,4.2 204.1,7.1 210.6,10.5 217.2,14.1 223.8,18.0 230.4,22.1 237.0,26.5 243.5,31.1 250.1,36.0 256.7,41.4 263.3,47.3 269.9,53.7 276.5,60.6 283.0,68.0 289.6,75.8 296.2,83.6 302.8,91.3 309.4,98.7 315.9,105.3 322.5,111.0 329.1,115.4 335.7,118.5 342.3,120.0 348.9,119.9 355.4,118.4 362.0,115.5 368.6,111.4 375.2,106.4 381.8,100.9 388.4,94.9 394.9,88.9 401.5,83.2 408.1,77.7 414.7,72.7 421.3,68.3 427.8,64.4 434.4,61.0 441.0,58.0 447.6,55.3 454.2,52.9 460.8,50.7 467.3,48.7 473.9,46.9 480.5,45.6 487.1,44.7 493.7,44.4 500.3,45.0 506.8,46.7 513.4,49.4 520.0,53.5" fill="none" stroke="#4cc9f0" stroke-width="2"/><line x1="0" y1="119" x2="520" y2="119" stroke="#2a2f3a"/></svg>
+            </section>
+            
+
+            <section class="card chart-card">
+              <h3>铜(CU0) 小时收盘路径</h3>
+              <svg viewBox="0 0 520 120" class="spark"><polyline points="0.0,108.8 6.6,110.9 13.2,112.7 19.7,114.4 26.3,115.9 32.9,117.3 39.5,118.5 46.1,119.4 52.7,119.9 59.2,120.0 65.8,119.5 72.4,118.2 79.0,116.0 85.6,113.0 92.2,109.0 98.7,104.1 105.3,98.4 111.9,92.1 118.5,85.3 125.1,78.3 131.6,71.3 138.2,64.6 144.8,58.4 151.4,52.9 158.0,48.2 164.6,44.4 171.1,41.6 177.7,39.6 184.3,38.5 190.9,38.1 197.5,38.3 204.1,38.9 210.6,39.9 217.2,41.1 223.8,42.5 230.4,44.1 237.0,45.8 243.5,47.7 250.1,49.8 256.7,52.3 263.3,55.2 269.9,58.4 276.5,62.0 283.0,66.0 289.6,70.2 296.2,74.5 302.8,78.7 309.4,82.6 315.9,86.0 322.5,88.7 329.1,90.5 335.7,91.3 342.3,90.9 348.9,89.4 355.4,86.8 362.0,83.2 368.6,78.7 375.2,73.6 381.8,68.0 388.4,62.1 394.9,56.3 401.5,50.5 408.1,45.0 414.7,39.9 421.3,35.1 427.8,30.8 434.4,26.8 441.0,23.1 447.6,19.7 454.2,16.4 460.8,13.3 467.3,10.4 473.9,7.6 480.5,5.1 487.1,3.0 493.7,1.3 500.3,0.3 506.8,0.0 513.4,0.6 520.0,2.0" fill="none" stroke="#4cc9f0" stroke-width="2"/><line x1="0" y1="119" x2="520" y2="119" stroke="#2a2f3a"/></svg>
+            </section>
+            
+
+            <section class="card chart-card">
+              <h3>豆粕(M0) 小时收盘路径</h3>
+              <svg viewBox="0 0 520 120" class="spark"><polyline points="0.0,99.4 6.6,102.8 13.2,106.0 19.7,108.8 26.3,111.5 32.9,113.9 39.5,116.1 46.1,117.9 52.7,119.3 59.2,120.0 65.8,119.9 72.4,118.8 79.0,116.5 85.6,113.0 92.2,108.3 98.7,102.3 105.3,95.3 111.9,87.4 118.5,78.9 125.1,70.1 131.6,61.3 138.2,52.9 144.8,45.1 151.4,38.3 158.0,32.6 164.6,28.1 171.1,24.9 177.7,22.9 184.3,22.0 190.9,22.1 197.5,22.9 204.1,24.4 210.6,26.3 217.2,28.6 223.8,31.1 230.4,33.8 237.0,36.7 243.5,39.9 250.1,43.4 256.7,47.3 263.3,51.8 269.9,56.7 276.5,62.2 283.0,68.2 289.6,74.4 296.2,80.8 302.8,87.1 309.4,93.0 315.9,98.2 322.5,102.4 329.1,105.4 335.7,107.1 342.3,107.2 348.9,105.8 355.4,102.9 362.0,98.6 368.6,93.2 375.2,86.9 381.8,80.0 388.4,72.8 394.9,65.5 401.5,58.4 408.1,51.6 414.7,45.3 421.3,39.5 427.8,34.3 434.4,29.5 441.0,25.2 447.6,21.2 454.2,17.4 460.8,13.8 467.3,10.5 473.9,7.4 480.5,4.6 487.1,2.4 493.7,0.8 500.3,0.0 506.8,0.2 513.4,1.6 520.0,4.2" fill="none" stroke="#4cc9f0" stroke-width="2"/><line x1="0" y1="119" x2="520" y2="119" stroke="#2a2f3a"/></svg>
+            </section>
+            
+    </section>
+  </main>
+</body>
+</html>
