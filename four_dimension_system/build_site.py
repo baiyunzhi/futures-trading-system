@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from market_system import DIMENSIONS, SYMBOLS, TIMEFRAMES, analyze_market, build_timeframes, load_or_create_data, sparkline_svg
+from market_system import SYMBOLS, TIMEFRAMES, analyze_market, build_timeframes, load_or_create_data
 
 
 ROOT = Path(__file__).resolve().parent
@@ -17,92 +17,94 @@ def td(value: object, cls: str = "") -> str:
     return f"<td{klass}>{value}</td>"
 
 
-def build_matrix_table(reports) -> str:
-    headers = ["品种", "周期", *DIMENSIONS, "周期结论"]
-    rows = []
-    for report in reports:
-        for timeframe in TIMEFRAMES:
-            view = report.views[timeframe]
-            rows.append(
-                "<tr>"
-                + td(f"{report.name}({report.symbol})")
-                + td(timeframe)
-                + dim_cell(view.price)
-                + dim_cell(view.volume)
-                + dim_cell(view.open_interest)
-                + dim_cell(view.time)
-                + td(view.summary, "left")
-                + "</tr>"
-            )
-    return table(headers, rows)
-
-
-def dim_cell(view) -> str:
-    cls = {"bull": "good", "bear": "bad", "neutral": "muted"}.get(view.bias, "muted")
-    return td(f'<b class="{cls}">{view.state}</b><br><small>{view.evidence}</small>', "left")
-
-
-def build_story_cards(reports) -> str:
-    cards = []
-    for report in reports:
-        for timeframe in TIMEFRAMES:
-            view = report.views[timeframe]
-            cards.append(
-                f"""
-                <section class="card story">
-                  <h3>{report.name}({report.symbol}) · {timeframe}</h3>
-                  <p>{view.summary}</p>
-                </section>
-                """
-            )
-    return "\n".join(cards)
-
-
-def build_chart_section(data: pd.DataFrame) -> str:
+def build_timeframe_sections(reports, data: pd.DataFrame) -> str:
     blocks = []
+    reports_by_symbol = {report.symbol: report for report in reports}
     for symbol, meta in SYMBOLS.items():
-        symbol_df = data[data["symbol"] == symbol]
-        frames = build_timeframes(symbol_df)
-        blocks.append(
-            f"""
-            <section class="card chart-card">
-              <h3>{meta["name"]}({symbol}) 小时收盘路径</h3>
-              {sparkline_svg(frames["小时线"])}
-            </section>
-            """
-        )
-    return "\n".join(blocks)
-
-
-def build_kline_tables(data: pd.DataFrame) -> str:
-    blocks = []
-    for symbol, meta in SYMBOLS.items():
+        report = reports_by_symbol.get(symbol)
+        if report is None:
+            continue
         frames = build_timeframes(data[data["symbol"] == symbol])
         for timeframe in TIMEFRAMES:
             frame = frames[timeframe].tail(12).copy()
-            rows = []
-            for _, row in frame.iterrows():
-                dt = pd.to_datetime(row["datetime"]).strftime("%Y-%m-%d %H:%M")
-                rows.append(
-                    "<tr>"
-                    + td(dt)
-                    + td(row["open"])
-                    + td(row["high"])
-                    + td(row["low"])
-                    + td(row["close"])
-                    + td(int(row["volume"]))
-                    + td(int(row["open_interest"]))
-                    + "</tr>"
-                )
+            view = report.views[timeframe]
             blocks.append(
                 f"""
-                <section class="card">
-                  <h2>{meta["name"]}({symbol}) · {timeframe}K线数据</h2>
-                  {table(["时间", "开盘", "高点", "低点", "收盘", "成交量", "持仓量"], rows)}
+                <section class="period">
+                  <div class="period-head">
+                    <h2>{meta["name"]}({symbol}) · {timeframe}</h2>
+                    <p>{view.summary}</p>
+                  </div>
+                  {kline_svg(frame)}
+                  {build_kline_table(frame)}
                 </section>
                 """
             )
     return "\n".join(blocks)
+
+
+def build_kline_table(frame: pd.DataFrame) -> str:
+    rows = []
+    for _, row in frame.iterrows():
+        dt = pd.to_datetime(row["datetime"]).strftime("%Y-%m-%d %H:%M")
+        rows.append(
+            "<tr>"
+            + td(dt)
+            + td(f"{float(row['open']):.2f}")
+            + td(f"{float(row['high']):.2f}")
+            + td(f"{float(row['low']):.2f}")
+            + td(f"{float(row['close']):.2f}")
+            + td(int(row["volume"]))
+            + td(int(row["open_interest"]))
+            + "</tr>"
+        )
+    return table(["时间", "开盘", "高点", "低点", "收盘", "成交量", "持仓量"], rows)
+
+
+def kline_svg(frame: pd.DataFrame, width: int = 980, height: int = 360) -> str:
+    data = frame.tail(12).copy()
+    if data.empty:
+        return ""
+    top_pad = 24
+    bottom_pad = 48
+    left_pad = 58
+    right_pad = 18
+    plot_w = width - left_pad - right_pad
+    plot_h = height - top_pad - bottom_pad
+    price_high = float(data["high"].max())
+    price_low = float(data["low"].min())
+    price_span = price_high - price_low if price_high > price_low else 1.0
+    step = plot_w / max(1, len(data))
+    candle_w = max(10, step * 0.48)
+
+    def y(price: float) -> float:
+        return top_pad + (price_high - price) / price_span * plot_h
+
+    elements = [
+        f'<svg viewBox="0 0 {width} {height}" class="kline" role="img">',
+        f'<line x1="{left_pad}" y1="{top_pad}" x2="{left_pad}" y2="{top_pad + plot_h}" class="axis"/>',
+        f'<line x1="{left_pad}" y1="{top_pad + plot_h}" x2="{width - right_pad}" y2="{top_pad + plot_h}" class="axis"/>',
+        f'<text x="8" y="{top_pad + 4}" class="axis-label">{price_high:.2f}</text>',
+        f'<text x="8" y="{top_pad + plot_h}" class="axis-label">{price_low:.2f}</text>',
+    ]
+    for idx, (_, row) in enumerate(data.iterrows()):
+        open_ = float(row["open"])
+        high = float(row["high"])
+        low = float(row["low"])
+        close = float(row["close"])
+        x = left_pad + idx * step + step / 2
+        body_y = min(y(open_), y(close))
+        body_h = max(2, abs(y(open_) - y(close)))
+        cls = "up" if close >= open_ else "down"
+        date_label = pd.to_datetime(row["datetime"]).strftime("%m-%d")
+        elements.extend([
+            f'<line x1="{x:.1f}" y1="{y(high):.1f}" x2="{x:.1f}" y2="{y(low):.1f}" class="{cls} wick"/>',
+            f'<rect x="{x - candle_w / 2:.1f}" y="{body_y:.1f}" width="{candle_w:.1f}" height="{body_h:.1f}" class="{cls} body"/>',
+        ])
+        if idx % 2 == 0 or len(data) <= 8:
+            elements.append(f'<text x="{x:.1f}" y="{height - 20}" class="date-label">{date_label}</text>')
+    elements.append("</svg>")
+    return "".join(elements)
 
 
 def table(headers: list[str], rows: list[str]) -> str:
@@ -146,25 +148,19 @@ def render_html(reports, data: pd.DataFrame) -> str:
       background: #0f131a;
     }}
     h1 {{ margin: 0 0 8px; font-size: 24px; }}
-    h2 {{ margin: 0 0 14px; font-size: 18px; }}
-    h3 {{ margin: 0 0 8px; font-size: 15px; }}
+    h2 {{ margin: 0 0 8px; font-size: 18px; }}
     main {{ padding: 18px 28px 40px; }}
     .note {{ color: var(--muted); margin: 0; }}
-    .card {{
+    .card, .period {{
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 16px;
       margin-bottom: 16px;
     }}
-    .grid {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 14px;
-    }}
-    .story p {{ margin: 8px 0 0; color: #c9d1d9; }}
+    .period-head p {{ margin: 0 0 14px; color: #c9d1d9; }}
     .table-wrap {{ overflow-x: auto; }}
-    table {{ width: 100%; border-collapse: collapse; min-width: 980px; }}
+    table {{ width: 100%; border-collapse: collapse; min-width: 760px; }}
     th, td {{
       border: 1px solid var(--line);
       padding: 8px 10px;
@@ -173,19 +169,22 @@ def render_html(reports, data: pd.DataFrame) -> str:
       font-size: 13px;
     }}
     th {{ background: var(--panel2); color: #c9d1d9; }}
-    td.left {{ text-align: left; min-width: 180px; }}
     small {{ color: var(--muted); }}
-    .good {{ color: var(--good); }}
-    .bad {{ color: var(--bad); }}
-    .warn {{ color: var(--warn); }}
-    .muted {{ color: var(--muted); }}
-    .spark {{
+    .kline {{
       width: 100%;
-      height: 120px;
+      height: 360px;
       background: #0d1117;
       border: 1px solid var(--line);
       border-radius: 6px;
+      margin-bottom: 12px;
     }}
+    .axis {{ stroke: #303846; stroke-width: 1; }}
+    .axis-label, .date-label {{ fill: #8b949e; font-size: 12px; }}
+    .date-label {{ text-anchor: middle; }}
+    .up.wick {{ stroke: #2fbf71; stroke-width: 2; }}
+    .down.wick {{ stroke: #ff5f56; stroke-width: 2; }}
+    .up.body {{ fill: #2fbf71; }}
+    .down.body {{ fill: #ff5f56; }}
     .steps li {{ margin: 6px 0; }}
   </style>
 </head>
@@ -206,20 +205,7 @@ def render_html(reports, data: pd.DataFrame) -> str:
       </ol>
     </section>
 
-    <section class="card">
-      <h2>三周期 × 四维度行情矩阵</h2>
-      {build_matrix_table(reports)}
-    </section>
-
-    <section class="grid">
-      {build_story_cards(reports)}
-    </section>
-
-    <section class="grid">
-      {build_chart_section(data)}
-    </section>
-
-    {build_kline_tables(data)}
+    {build_timeframe_sections(reports, data)}
   </main>
 </body>
 </html>
