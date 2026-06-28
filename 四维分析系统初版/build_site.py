@@ -43,7 +43,67 @@ def pct(distance: float, close: float) -> float:
     return abs(distance - close) / close * 100 if close else 999.0
 
 
-def period_card(symbol: str, name: str, timeframe: str, frame: pd.DataFrame) -> str:
+def build_symbol_priorities(frames_by_symbol: dict[str, dict[str, pd.DataFrame]]) -> dict[str, dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for symbol, frames in frames_by_symbol.items():
+        daily = frames.get("日线")
+        if daily is None or daily.empty:
+            continue
+        data = daily.sort_values("datetime").reset_index(drop=True)
+        anchor = data.loc[data["volume"].idxmax()]
+        latest = data.iloc[-1]
+        first = data.iloc[0]
+        after = data[data["datetime"] > anchor["datetime"]]
+        latest_close = float(latest["close"])
+        first_close = float(first["close"])
+        anchor_low = float(anchor["low"])
+        close_change_pct = (latest_close - first_close) / first_close * 100 if first_close else 0.0
+        oi_change = float(latest["open_interest"] - first["open_interest"])
+        below_ratio = float((after["close"] < anchor_low).sum() / len(after)) if len(after) else 0.0
+        chain = build_observation_chain(data, anchor)
+        chain_count = len(chain.get("levels", []))
+        latest_near_low = float(latest["low"]) <= float(data["low"].min()) * 1.01
+        weakness_score = (
+            max(0.0, -close_change_pct) * 4.0
+            + chain_count * 18.0
+            + below_ratio * 30.0
+            + (18.0 if latest_close < anchor_low else 0.0)
+            + (14.0 if latest_near_low else 0.0)
+            + (10.0 if close_change_pct < 0 and oi_change > 0 else 0.0)
+        )
+        rows.append(
+            {
+                "symbol": symbol,
+                "name": SYMBOLS[symbol]["name"],
+                "score": weakness_score,
+                "close_change_pct": close_change_pct,
+                "oi_change": oi_change,
+                "chain_count": chain_count,
+                "latest_close": latest_close,
+            }
+        )
+    rows.sort(key=lambda item: float(item["score"]), reverse=True)
+    priorities: dict[str, dict[str, object]] = {}
+    for rank, row in enumerate(rows, start=1):
+        priority = "A类优先" if rank == 1 and float(row["score"]) >= 45 else "B类备选" if float(row["score"]) >= 25 else "C类等待"
+        row["rank"] = rank
+        row["priority"] = priority
+        row["summary"] = (
+            f"日线两个月收盘变化 {float(row['close_change_pct']):.2f}%，"
+            f"动态观察位 {int(row['chain_count'])} 层，"
+            f"持仓变化 {float(row['oi_change']):.0f}。"
+        )
+        priorities[str(row["symbol"])] = row
+    return priorities
+
+
+def period_card(
+    symbol: str,
+    name: str,
+    timeframe: str,
+    frame: pd.DataFrame,
+    priority: dict[str, object] | None,
+) -> str:
     data = frame.sort_values("datetime").reset_index(drop=True)
     anchor = data.loc[data["volume"].idxmax()]
     latest = data.iloc[-1]
@@ -92,9 +152,14 @@ def period_card(symbol: str, name: str, timeframe: str, frame: pd.DataFrame) -> 
     tags = normalize_distance_tags(tags, observation_chain, pressure_distance, support_distance)
     tags.extend(chain_tags(observation_chain))
     tags.append(anchor_state["state"])
+    weak_observation = weak_consolidation_observation(data, observation_chain)
+    tags.extend(weak_observation["tags"])
+    if priority:
+        tags.append(str(priority["priority"]))
     readiness_level, readiness_text = readiness_from_current_observation(tags, pressure_distance, support_distance)
     wait_reason = waiting_reason_from_current_observation(tags, pressure_distance, support_distance, readiness_level)
     wait_reason = combine_wait_reason(wait_reason, anchor_state)
+    wait_reason = combine_weak_wait_reason(wait_reason, weak_observation)
     status = build_status(
         tags,
         close_change,
@@ -116,6 +181,7 @@ def period_card(symbol: str, name: str, timeframe: str, frame: pd.DataFrame) -> 
         f"{anchor_state['observe']}"
     )
     invalidation = build_invalidation(tags, pressure, support, anchor_high, anchor_low, anchor_state)
+    prepare_text = build_prepare_text(readiness_text, priority, weak_observation)
     tag_html = "".join(f'<span class="tag">{escape(tag)}</span>' for tag in tags)
     chart_id = f"{symbol}-{timeframe}"
     return f"""
@@ -134,7 +200,7 @@ def period_card(symbol: str, name: str, timeframe: str, frame: pd.DataFrame) -> 
             {line_item("1. 当前状态", status)}
             {line_item("2. 当前观察位", observe)}
             {line_item("3. 等待原因", wait_reason)}
-            {line_item("4. 准备等级", readiness_text)}
+            {line_item("4. 准备等级", prepare_text)}
             {line_item("5. 失效条件", invalidation)}
           </aside>
         </div>
@@ -397,6 +463,95 @@ def combine_wait_reason(wait_reason: str, anchor_state: dict[str, object]) -> st
     return f"{wait_reason}锚点提示：{anchor_state['wait']}"
 
 
+def weak_consolidation_observation(data: pd.DataFrame, observation_chain: dict[str, object]) -> dict[str, object]:
+    levels = observation_chain.get("levels", [])
+    if not levels:
+        return {"tags": [], "text": "", "rr_text": ""}
+    pressure_time = levels[-1]["time"]
+    pressure = float(levels[-1]["level"])
+    scope = data[data["datetime"] >= pressure_time].reset_index(drop=True)
+    if len(scope) < 5:
+        return {"tags": [], "text": "", "rr_text": ""}
+
+    latest = scope.iloc[-1]
+    latest_low = float(latest["low"])
+    candidates: list[dict[str, object]] = []
+    for idx in range(0, len(scope) - 3):
+        row = scope.iloc[idx]
+        level = float(row["low"])
+        if level >= pressure:
+            continue
+        following = scope.iloc[idx + 1 : -1]
+        if len(following) < 2:
+            continue
+        if not bool((following["close"] > level).all()):
+            continue
+        if latest_low >= level:
+            continue
+        resistance_high = float(scope.iloc[idx:-1]["high"].max())
+        entry = float(row["high"])
+        stop_buffer = max(1.0, round(entry * 0.0003))
+        stop = resistance_high + stop_buffer
+        risk = max(0.01, stop - entry)
+        first_reward = max(0.0, entry - level)
+        extended_reward = max(0.0, entry - latest_low)
+        candidates.append(
+            {
+                "time": row["datetime"],
+                "level": level,
+                "entry": entry,
+                "resistance_high": resistance_high,
+                "stop": stop,
+                "first_rr": first_reward / risk if risk else 0.0,
+                "extended_rr": extended_reward / risk if risk else 0.0,
+                "latest_low": latest_low,
+            }
+        )
+    if not candidates:
+        return {"tags": [], "text": "", "rr_text": ""}
+
+    item = candidates[-1]
+    resistance_text = (
+        f"{float(item['entry']):.2f}"
+        if abs(float(item["entry"]) - float(item["resistance_high"])) < 0.01
+        else f"{float(item['entry']):.2f}-{float(item['resistance_high']):.2f}"
+    )
+    rr_pass = float(item["first_rr"]) >= 3.0
+    tags = ["弱势震荡", "风险收益合格" if rr_pass else "风险收益不足"]
+    text = (
+        f"弱势震荡观察：{format_dt(item['time'])} 前低 {float(item['level']):.2f} 被跌破前，"
+        f"价格在 {resistance_text} 附近反抽停滞；再次跌破后，该前低成为新压力观察位。"
+    )
+    rr_text = (
+        f"若只在反抽 {float(item['entry']):.2f} 附近试空，止损放在 {float(item['stop']):.2f} 上方，"
+        f"第一目标 {float(item['level']):.2f}，风险收益比约 1:{float(item['first_rr']):.1f}；"
+        f"扩展到最新低点 {float(item['latest_low']):.2f} 约 1:{float(item['extended_rr']):.1f}。"
+        "当前位置若已远离反抽区，只等待，不追空。"
+    )
+    return {"tags": tags, "text": text, "rr_text": rr_text}
+
+
+def combine_weak_wait_reason(wait_reason: str, weak_observation: dict[str, object]) -> str:
+    text = str(weak_observation.get("text") or "")
+    if not text:
+        return wait_reason
+    return f"{wait_reason}{text}"
+
+
+def build_prepare_text(
+    readiness_text: str,
+    priority: dict[str, object] | None,
+    weak_observation: dict[str, object],
+) -> str:
+    parts = [readiness_text]
+    if priority:
+        parts.append(f"品种优先级 {priority['priority']}，排名第 {priority['rank']}；{priority['summary']}")
+    rr_text = str(weak_observation.get("rr_text") or "")
+    if rr_text:
+        parts.append(rr_text)
+    return " ".join(parts)
+
+
 def build_invalidation(
     tags: list[str],
     pressure: float,
@@ -586,7 +741,37 @@ def build_frames_by_symbol(data: dict[str, pd.DataFrame]) -> dict[str, dict[str,
     return frames_by_symbol
 
 
-def timeframe_sections(frames_by_symbol: dict[str, dict[str, pd.DataFrame]]) -> str:
+def build_selection_module(priorities: dict[str, dict[str, object]]) -> str:
+    if not priorities:
+        return ""
+    rows = sorted(priorities.values(), key=lambda item: int(item["rank"]))
+    leader = rows[0]
+    cards = []
+    for row in rows:
+        cards.append(
+            f"""
+            <section class="selection-card">
+              <b>{escape(str(row['priority']))} · {escape(str(row['name']))}({escape(str(row['symbol']))})</b>
+              <p>{escape(str(row['summary']))}</p>
+            </section>
+            """
+        )
+    return f"""
+      <section class="selection-module">
+        <h2>品种选择工作流</h2>
+        <p>
+          当前按四维弱势排序，最优先观察 {escape(str(leader['name']))}({escape(str(leader['symbol']))})。
+          工作流顺序：先确定最弱或最强品种，再看当前观察位，再等待反抽或回踩，最后只在风险收益比合格时进入准备。
+        </p>
+        <div class="selection-grid">{''.join(cards)}</div>
+      </section>
+    """
+
+
+def timeframe_sections(
+    frames_by_symbol: dict[str, dict[str, pd.DataFrame]],
+    priorities: dict[str, dict[str, object]],
+) -> str:
     sections = []
     for timeframe in TIMEFRAMES:
         cards = []
@@ -594,7 +779,7 @@ def timeframe_sections(frames_by_symbol: dict[str, dict[str, pd.DataFrame]]) -> 
             frames = frames_by_symbol.get(symbol)
             if not frames or timeframe not in frames:
                 continue
-            cards.append(period_card(symbol, meta["name"], timeframe, frames[timeframe]))
+            cards.append(period_card(symbol, meta["name"], timeframe, frames[timeframe], priorities.get(symbol)))
         if cards:
             sections.append(f'<h2 class="period-group-title">{escape(timeframe)}对比</h2>')
             sections.extend(cards)
@@ -603,7 +788,9 @@ def timeframe_sections(frames_by_symbol: dict[str, dict[str, pd.DataFrame]]) -> 
 
 def render() -> str:
     data = load_market_data(DATA_FILES)
-    blocks = timeframe_sections(build_frames_by_symbol(data))
+    frames_by_symbol = build_frames_by_symbol(data)
+    priorities = build_symbol_priorities(frames_by_symbol)
+    blocks = build_selection_module(priorities) + timeframe_sections(frames_by_symbol, priorities)
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -650,6 +837,42 @@ def render() -> str:
       border-radius: 8px;
       background: #0e141c;
       font-size: 18px;
+    }}
+    .selection-module {{
+      grid-column: 1 / -1;
+      border: 1px solid var(--line);
+      background: #0e141c;
+      border-radius: 8px;
+      padding: 16px;
+    }}
+    .selection-module h2 {{
+      margin: 0 0 8px;
+      font-size: 18px;
+    }}
+    .selection-module p {{
+      margin: 0 0 12px;
+      color: #d7dee8;
+      font-size: 14px;
+    }}
+    .selection-grid {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(260px, 1fr));
+      gap: 10px;
+    }}
+    .selection-card {{
+      border: 1px solid #314055;
+      background: #111821;
+      border-radius: 6px;
+      padding: 10px 12px;
+    }}
+    .selection-card b {{
+      color: var(--blue);
+      font-size: 14px;
+    }}
+    .selection-card p {{
+      margin: 6px 0 0;
+      color: #c9d1d9;
+      font-size: 13px;
     }}
     .period-card {{
       border: 1px solid var(--line);
@@ -762,6 +985,9 @@ def render() -> str:
         padding: 14px;
       }}
       .period-layout {{
+        grid-template-columns: 1fr;
+      }}
+      .selection-grid {{
         grid-template-columns: 1fr;
       }}
       .info-pane {{

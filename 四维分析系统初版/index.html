@@ -45,6 +45,42 @@
       background: #0e141c;
       font-size: 18px;
     }
+    .selection-module {
+      grid-column: 1 / -1;
+      border: 1px solid var(--line);
+      background: #0e141c;
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .selection-module h2 {
+      margin: 0 0 8px;
+      font-size: 18px;
+    }
+    .selection-module p {
+      margin: 0 0 12px;
+      color: #d7dee8;
+      font-size: 14px;
+    }
+    .selection-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(260px, 1fr));
+      gap: 10px;
+    }
+    .selection-card {
+      border: 1px solid #314055;
+      background: #111821;
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+    .selection-card b {
+      color: var(--blue);
+      font-size: 14px;
+    }
+    .selection-card p {
+      margin: 6px 0 0;
+      color: #c9d1d9;
+      font-size: 13px;
+    }
     .period-card {
       border: 1px solid var(--line);
       background: var(--panel);
@@ -158,6 +194,9 @@
       .period-layout {
         grid-template-columns: 1fr;
       }
+      .selection-grid {
+        grid-template-columns: 1fr;
+      }
       .info-pane {
         border-left: 0;
         border-top: 1px solid var(--line);
@@ -176,6 +215,25 @@
     <p class="note">减法版：每个品种、每个周期只输出当前状态、当前观察位、等待原因、准备等级、失效条件。</p>
   </header>
   <main>
+    
+      <section class="selection-module">
+        <h2>品种选择工作流</h2>
+        <p>
+          当前按四维弱势排序，最优先观察 PVC(V0)。
+          工作流顺序：先确定最弱或最强品种，再看当前观察位，再等待反抽或回踩，最后只在风险收益比合格时进入准备。
+        </p>
+        <div class="selection-grid">
+            <section class="selection-card">
+              <b>A类优先 · PVC(V0)</b>
+              <p>日线两个月收盘变化 -16.07%，动态观察位 3 层，持仓变化 498629。</p>
+            </section>
+            
+            <section class="selection-card">
+              <b>B类备选 · 螺纹钢(RB0)</b>
+              <p>日线两个月收盘变化 -3.04%，动态观察位 1 层，持仓变化 111042。</p>
+            </section>
+            </div>
+      </section>
     <h2 class="period-group-title">日线对比</h2>
 
       <article class="period-card level-2">
@@ -189,7 +247,7 @@
             <div class="kline-detail" id="detail-RB0-日线">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
           </div>
           <aside class="info-pane">
-            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">锚点区间拉锯</span><span class="tag">接近当前压力位</span><span class="tag">支撑转压力</span><span class="tag">原锚点有效</span></div>
+            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">锚点区间拉锯</span><span class="tag">接近当前压力位</span><span class="tag">支撑转压力</span><span class="tag">原锚点有效</span><span class="tag">B类备选</span></div>
             
       <section class="line-item">
         <b>1. 当前状态</b>
@@ -211,7 +269,7 @@
             
       <section class="line-item">
         <b>4. 准备等级</b>
-        <p>2级：反抽确认中</p>
+        <p>2级：反抽确认中 品种优先级 B类备选，排名第 2；日线两个月收盘变化 -3.04%，动态观察位 1 层，持仓变化 111042。</p>
       </section>
     
             
@@ -236,7 +294,7 @@
             <div class="kline-detail" id="detail-V0-日线">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
           </div>
           <aside class="info-pane">
-            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">远离当前压力位</span><span class="tag">动态观察位下移</span><span class="tag">原锚点有效</span></div>
+            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">远离当前压力位</span><span class="tag">动态观察位下移</span><span class="tag">原锚点有效</span><span class="tag">弱势震荡</span><span class="tag">风险收益合格</span><span class="tag">A类优先</span></div>
             
       <section class="line-item">
         <b>1. 当前状态</b>
@@ -252,13 +310,13 @@
             
       <section class="line-item">
         <b>3. 等待原因</b>
-        <p>当前价格距离最近压力观察位 6.02%，不适合追空，等待反抽靠近当前压力位。锚点提示：原锚点仍有效，继续观察其高低点的支撑压力转换。</p>
+        <p>当前价格距离最近压力观察位 6.02%，不适合追空，等待反抽靠近当前压力位。锚点提示：原锚点仍有效，继续观察其高低点的支撑压力转换。弱势震荡观察：2026-06-23 00:00 前低 4439.00 被跌破前，价格在 4529.00-4540.00 附近反抽停滞；再次跌破后，该前低成为新压力观察位。</p>
       </section>
     
             
       <section class="line-item">
         <b>4. 准备等级</b>
-        <p>0级：等待</p>
+        <p>0级：等待 品种优先级 A类优先，排名第 1；日线两个月收盘变化 -16.07%，动态观察位 3 层，持仓变化 498629。 若只在反抽 4529.00 附近试空，止损放在 4541.00 上方，第一目标 4439.00，风险收益比约 1:7.5；扩展到最新低点 4385.00 约 1:12.0。当前位置若已远离反抽区，只等待，不追空。</p>
       </section>
     
             
@@ -284,7 +342,7 @@
             <div class="kline-detail" id="detail-RB0-周线">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
           </div>
           <aside class="info-pane">
-            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">锚点区间拉锯</span><span class="tag">接近当前压力位</span><span class="tag">支撑转压力</span><span class="tag">候选新锚点</span></div>
+            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">锚点区间拉锯</span><span class="tag">接近当前压力位</span><span class="tag">支撑转压力</span><span class="tag">候选新锚点</span><span class="tag">B类备选</span></div>
             
       <section class="line-item">
         <b>1. 当前状态</b>
@@ -306,7 +364,7 @@
             
       <section class="line-item">
         <b>4. 准备等级</b>
-        <p>2级：反抽确认中</p>
+        <p>2级：反抽确认中 品种优先级 B类备选，排名第 2；日线两个月收盘变化 -3.04%，动态观察位 1 层，持仓变化 111042。</p>
       </section>
     
             
@@ -331,7 +389,7 @@
             <div class="kline-detail" id="detail-V0-周线">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
           </div>
           <aside class="info-pane">
-            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">远离当前压力位</span><span class="tag">支撑转压力</span><span class="tag">候选新锚点</span></div>
+            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">远离当前压力位</span><span class="tag">支撑转压力</span><span class="tag">候选新锚点</span><span class="tag">A类优先</span></div>
             
       <section class="line-item">
         <b>1. 当前状态</b>
@@ -353,7 +411,7 @@
             
       <section class="line-item">
         <b>4. 准备等级</b>
-        <p>0级：等待</p>
+        <p>0级：等待 品种优先级 A类优先，排名第 1；日线两个月收盘变化 -16.07%，动态观察位 3 层，持仓变化 498629。</p>
       </section>
     
             
@@ -379,7 +437,7 @@
             <div class="kline-detail" id="detail-RB0-小时线">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
           </div>
           <aside class="info-pane">
-            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">接近当前压力位</span><span class="tag">动态观察位下移</span><span class="tag">原锚点有效</span></div>
+            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">接近当前压力位</span><span class="tag">动态观察位下移</span><span class="tag">原锚点有效</span><span class="tag">B类备选</span></div>
             
       <section class="line-item">
         <b>1. 当前状态</b>
@@ -401,7 +459,7 @@
             
       <section class="line-item">
         <b>4. 准备等级</b>
-        <p>3级：位置明确，可制定计划</p>
+        <p>3级：位置明确，可制定计划 品种优先级 B类备选，排名第 2；日线两个月收盘变化 -3.04%，动态观察位 1 层，持仓变化 111042。</p>
       </section>
     
             
@@ -426,7 +484,7 @@
             <div class="kline-detail" id="detail-V0-小时线">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
           </div>
           <aside class="info-pane">
-            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">接近当前压力位</span><span class="tag">动态观察位下移</span><span class="tag">原锚点有效</span></div>
+            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">接近当前压力位</span><span class="tag">动态观察位下移</span><span class="tag">原锚点有效</span><span class="tag">A类优先</span></div>
             
       <section class="line-item">
         <b>1. 当前状态</b>
@@ -448,7 +506,7 @@
             
       <section class="line-item">
         <b>4. 准备等级</b>
-        <p>2级：反抽确认中</p>
+        <p>2级：反抽确认中 品种优先级 A类优先，排名第 1；日线两个月收盘变化 -16.07%，动态观察位 3 层，持仓变化 498629。</p>
       </section>
     
             
