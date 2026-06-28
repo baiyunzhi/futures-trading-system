@@ -293,9 +293,9 @@ def get_row_by_date(frame: pd.DataFrame, date_text: str) -> pd.Series | None:
 
 
 def build_workflow_alerts(timeframe: str, frame: pd.DataFrame) -> list[str]:
-    if timeframe != "日线":
-        return []
-    return build_daily_pressure_workflow(frame)
+    if timeframe == "日线":
+        return build_daily_pressure_workflow(frame)
+    return build_failed_pressure_workflow(timeframe, frame)
 
 
 def build_daily_pressure_workflow(frame: pd.DataFrame) -> list[str]:
@@ -384,6 +384,120 @@ def build_daily_pressure_workflow(frame: pd.DataFrame) -> list[str]:
         "盘中失效提示：价格放量增仓并站上3200，提示“不做空，压力带被市场接受”。"
     )
     return alerts
+
+
+def build_failed_pressure_workflow(timeframe: str, frame: pd.DataFrame) -> list[str]:
+    candidate = find_latest_failed_pressure_test(frame)
+    if candidate is None:
+        return [
+            f"{timeframe}自动提示：当前数据内没有识别到“盘中突破前高、收盘未站住”的压力测试失败，系统保持观察。"
+        ]
+
+    base_row, test_row = candidate
+    max_volume_row = frame.loc[frame["volume"].idxmax()]
+    pressure = float(base_row["high"])
+    failed_break_high = float(test_row["high"])
+    failed_break_close = float(test_row["close"])
+    pressure_band_high = round_up_to_ten(max(pressure, failed_break_high))
+    stop_price = pressure_band_high + 1.0
+    target = float(max_volume_row["low"])
+    risk = stop_price - pressure
+    reward = pressure - target
+    ratio = reward / risk if risk > 0 else 0.0
+    latest = frame.iloc[-1]
+    latest_close = float(latest["close"])
+    latest_high = float(latest["high"])
+    latest_low = float(latest["low"])
+    volume_change = float(test_row["volume"] - base_row["volume"])
+    oi_change = float(test_row["open_interest"] - base_row["open_interest"])
+
+    alerts = [
+        (
+            f"{timeframe}自动识别压力带：{format_dt(base_row['datetime'])} 高点 {pressure:.2f}，"
+            f"{format_dt(test_row['datetime'])} 盘中高点 {failed_break_high:.2f}，收盘 {failed_break_close:.2f} "
+            f"回到压力内，系统将 {pressure:.2f}-{pressure_band_high:.2f} 标记为{timeframe}轻仓试空观察带。"
+        ),
+        "触发条件1：盘中过前高但收盘未站住，压力测试失败成立。",
+    ]
+
+    if reward > 0 and ratio >= 3:
+        alerts.append(
+            f"触发条件2：按试空价 {pressure:.2f}、止损 {stop_price:.2f}、目标最大成交量K线低点 {target:.2f} 计算，"
+            f"风险利润比 1:{ratio:.2f}，达到1:3要求。"
+        )
+    elif reward <= 0:
+        alerts.append(
+            f"未触发条件2：最大成交量K线低点 {target:.2f} 不在试空价 {pressure:.2f} 下方，"
+            "这套压力带计划没有向下目标空间。"
+        )
+    else:
+        alerts.append(
+            f"未触发条件2：按试空价 {pressure:.2f}、止损 {stop_price:.2f}、目标 {target:.2f} 计算，"
+            f"风险利润比 1:{ratio:.2f}，未达到1:3要求。"
+        )
+
+    if volume_change > 0 and oi_change <= 0:
+        alerts.append(
+            f"触发条件3：测试K线较压力K线成交量增加 {volume_change:+.0f}，持仓量变化 {oi_change:+.0f}，"
+            "表现为放量但没有增仓上攻，强势上攻证据不足。"
+        )
+    elif volume_change > 0 and oi_change > 0:
+        alerts.append(
+            f"观察条件3：测试K线较压力K线成交量增加 {volume_change:+.0f}，持仓量增加 {oi_change:+.0f}，"
+            f"若后续价格站上 {pressure_band_high:.2f}，则不做空。"
+        )
+    else:
+        alerts.append(
+            f"观察条件3：测试K线较压力K线成交量变化 {volume_change:+.0f}，持仓量变化 {oi_change:+.0f}，"
+            "量仓没有显示强势上攻。"
+        )
+
+    if latest_close > pressure_band_high:
+        alerts.append(
+            f"当前状态：最新收盘 {latest_close:.2f} 已在 {pressure_band_high:.2f} 上方，"
+            f"{timeframe}轻仓试空提示失效，等待重新回到压力带内再评估。"
+        )
+    elif latest_high >= pressure and latest_low <= pressure_band_high:
+        alerts.append(
+            f"当前状态：最新K线波动区间 {latest_low:.2f}-{latest_high:.2f} 触及观察带，"
+            f"需要检查低一级周期K线是否站稳 {pressure_band_high:.2f}。"
+        )
+    elif reward > 0 and latest_close < target:
+        alerts.append(
+            f"当前状态：最新收盘 {latest_close:.2f} 已低于目标 {target:.2f}，"
+            f"这笔{timeframe}压力带计划不再追空，等待新的压力区。"
+        )
+    else:
+        alerts.append(
+            f"当前状态：最新收盘 {latest_close:.2f} 未在 {pressure:.2f}-{pressure_band_high:.2f} 观察带内，"
+            "系统保持等待反抽提示。"
+        )
+
+    alerts.append(
+        f"触发提示：价格进入 {pressure:.2f}-{pressure_band_high:.2f} 后，若收盘不能站上 {pressure_band_high:.2f}，提示“压力带仍有效”。"
+    )
+    alerts.append(
+        f"失效提示：价格放量增仓并收在 {pressure_band_high:.2f} 上方，提示“不做空，压力带被市场接受”。"
+    )
+    return alerts
+
+
+def find_latest_failed_pressure_test(frame: pd.DataFrame) -> tuple[pd.Series, pd.Series] | None:
+    candidates: list[tuple[pd.Series, pd.Series]] = []
+    rows = list(frame.iterrows())
+    for idx in range(1, len(rows)):
+        _, base_row = rows[idx - 1]
+        _, test_row = rows[idx]
+        base_high = float(base_row["high"])
+        if float(test_row["high"]) > base_high and float(test_row["close"]) <= base_high:
+            candidates.append((base_row, test_row))
+    if not candidates:
+        return None
+    return candidates[-1]
+
+
+def round_up_to_ten(value: float) -> float:
+    return float(int((value + 9) // 10 * 10))
 
 
 def describe_participant_attitude(close_change: float, oi_change: float) -> str:
