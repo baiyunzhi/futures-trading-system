@@ -24,3 +24,16 @@ python 四维分析系统初版/build_site.py
 四维分析系统初版/index.html
 docs/四维分析系统初版/index.html
 ```
+
+## 新增品种
+
+新增品种时保持同一套工作流：
+
+```text
+1. 在 four_dimension_system/market_system.py 的 SYMBOLS 增加品种
+2. 准备该品种最近两个月 daily/hourly CSV
+3. 在 四维分析系统初版/build_site.py 的 DATA_FILES 增加数据路径
+4. 重新运行 python 四维分析系统初版/build_site.py
+```
+
+页面会自动输出该品种的周线、日线、小时线，每个周期包含五项描述和K线图。

@@ -94,6 +94,7 @@ def period_card(symbol: str, name: str, timeframe: str, frame: pd.DataFrame) -> 
     )
     invalidation = build_invalidation(tags, pressure, support, anchor_high, anchor_low)
     tag_html = "".join(f'<span class="tag">{escape(tag)}</span>' for tag in tags)
+    chart_id = f"{symbol}-{timeframe}"
     return f"""
       <article class="period-card level-{readiness_level}">
         <div class="card-head">
@@ -106,6 +107,8 @@ def period_card(symbol: str, name: str, timeframe: str, frame: pd.DataFrame) -> 
         {line_item("3. 等待原因", wait_reason)}
         {line_item("4. 准备等级", readiness_text)}
         {line_item("5. 失效条件", invalidation)}
+        {kline_svg(data, chart_id)}
+        <div class="kline-detail" id="detail-{escape(chart_id)}">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
       </article>
     """
 
@@ -165,6 +168,109 @@ def line_item(title: str, body: str) -> str:
         <p>{escape(body)}</p>
       </section>
     """
+
+
+def kline_svg(frame: pd.DataFrame, chart_id: str, width: int = 920, height: int = 420) -> str:
+    data = frame.sort_values("datetime").reset_index(drop=True)
+    if data.empty:
+        return ""
+    top_pad = 20
+    price_h = 210
+    sub_top = 270
+    sub_h = 90
+    bottom_pad = 32
+    left_pad = 54
+    right_pad = 16
+    plot_w = width - left_pad - right_pad
+    price_high = float(data["high"].max())
+    price_low = float(data["low"].min())
+    price_span = price_high - price_low if price_high > price_low else 1.0
+    high_row = data.loc[data["high"].idxmax()]
+    low_row = data.loc[data["low"].idxmin()]
+    max_volume_row = data.loc[data["volume"].idxmax()]
+    max_volume_high = float(max_volume_row["high"])
+    max_volume_low = float(max_volume_row["low"])
+    max_volume = float(data["volume"].max()) if float(data["volume"].max()) > 0 else 1.0
+    oi_high = float(data["open_interest"].max())
+    oi_low = float(data["open_interest"].min())
+    oi_span = oi_high - oi_low if oi_high > oi_low else 1.0
+    step = plot_w / max(1, len(data))
+    candle_w = max(6, min(12, step * 0.48))
+
+    def y(price: float) -> float:
+        return top_pad + (price_high - price) / price_span * price_h
+
+    def volume_y(volume: float) -> float:
+        return sub_top + sub_h - volume / max_volume * sub_h
+
+    def oi_y(value: float) -> float:
+        return sub_top + (oi_high - value) / oi_span * sub_h
+
+    def x_at(row_index: int) -> float:
+        return left_pad + row_index * step + step / 2
+
+    elements = [
+        f'<svg viewBox="0 0 {width} {height}" class="kline" role="img">',
+        f'<line x1="{left_pad}" y1="{top_pad}" x2="{left_pad}" y2="{top_pad + price_h}" class="axis"/>',
+        f'<line x1="{left_pad}" y1="{top_pad + price_h}" x2="{width - right_pad}" y2="{top_pad + price_h}" class="axis"/>',
+        f'<text x="8" y="{top_pad + 4}" class="axis-label">{price_high:.2f}</text>',
+        f'<text x="8" y="{top_pad + price_h}" class="axis-label">{price_low:.2f}</text>',
+        f'<line x1="{left_pad}" y1="{y(max_volume_high):.1f}" x2="{width - right_pad}" y2="{y(max_volume_high):.1f}" class="max-volume-line"/>',
+        f'<line x1="{left_pad}" y1="{y(max_volume_low):.1f}" x2="{width - right_pad}" y2="{y(max_volume_low):.1f}" class="max-volume-line"/>',
+        f'<text x="{width - right_pad - 190}" y="{y(max_volume_high) - 6:.1f}" class="max-volume-label">最大量高 {max_volume_high:.2f}</text>',
+        f'<text x="{width - right_pad - 190}" y="{y(max_volume_low) + 16:.1f}" class="max-volume-label">最大量低 {max_volume_low:.2f}</text>',
+        f'<text x="8" y="{sub_top + 12}" class="axis-label">成交量/持仓量</text>',
+        f'<line x1="{left_pad}" y1="{sub_top + sub_h}" x2="{width - right_pad}" y2="{sub_top + sub_h}" class="axis"/>',
+    ]
+    oi_points = []
+    for idx, row in data.iterrows():
+        open_ = float(row["open"])
+        high = float(row["high"])
+        low = float(row["low"])
+        close = float(row["close"])
+        volume = float(row["volume"])
+        open_interest = float(row["open_interest"])
+        x = x_at(idx)
+        body_y = min(y(open_), y(close))
+        body_h = max(2, abs(y(open_) - y(close)))
+        cls = "up" if close >= open_ else "down"
+        date_label = pd.to_datetime(row["datetime"]).strftime("%m-%d")
+        dt = pd.to_datetime(row["datetime"]).strftime("%Y-%m-%d %H:%M")
+        vol_top = volume_y(volume)
+        vol_h = sub_top + sub_h - vol_top
+        oi_points.append(f"{x:.1f},{oi_y(open_interest):.1f}")
+        elements.extend(
+            [
+                f'<line x1="{x:.1f}" y1="{y(high):.1f}" x2="{x:.1f}" y2="{y(low):.1f}" class="{cls} wick"/>',
+                f'<rect x="{x - candle_w / 2:.1f}" y="{body_y:.1f}" width="{candle_w:.1f}" height="{body_h:.1f}" class="{cls} body"/>',
+                f'<rect x="{x - candle_w / 2:.1f}" y="{vol_top:.1f}" width="{candle_w:.1f}" height="{vol_h:.1f}" class="volume-bar"/>',
+                (
+                    f'<rect x="{x - step / 2:.1f}" y="{top_pad}" width="{step:.1f}" height="{sub_top + sub_h - top_pad}" '
+                    f'class="candle-hit" data-chart="{escape(chart_id)}" data-time="{escape(dt)}" '
+                    f'data-open="{open_:.2f}" data-high="{high:.2f}" data-low="{low:.2f}" data-close="{close:.2f}" '
+                    f'data-volume="{int(volume)}" data-open-interest="{int(open_interest)}">'
+                    f'<title>{escape(dt)} 开 {open_:.2f} 高 {high:.2f} 低 {low:.2f} 收 {close:.2f} 量 {int(volume)} 持仓 {int(open_interest)}</title>'
+                    f'</rect>'
+                ),
+            ]
+        )
+        label_step = max(1, len(data) // 5)
+        if idx % label_step == 0 or idx == len(data) - 1:
+            elements.append(f'<text x="{x:.1f}" y="{height - bottom_pad + 18}" class="date-label">{date_label}</text>')
+
+    high_x = x_at(int(data.index.get_loc(high_row.name)))
+    low_x = x_at(int(data.index.get_loc(low_row.name)))
+    elements.extend(
+        [
+            f'<circle cx="{high_x:.1f}" cy="{y(float(high_row["high"])):.1f}" r="4" class="price-marker"/>',
+            f'<text x="{high_x + 8:.1f}" y="{y(float(high_row["high"])) - 8:.1f}" class="price-label">高 {float(high_row["high"]):.2f}</text>',
+            f'<circle cx="{low_x:.1f}" cy="{y(float(low_row["low"])):.1f}" r="4" class="price-marker"/>',
+            f'<text x="{low_x + 8:.1f}" y="{y(float(low_row["low"])) + 18:.1f}" class="price-label">低 {float(low_row["low"]):.2f}</text>',
+            f'<polyline points="{" ".join(oi_points)}" fill="none" class="oi-line"/>',
+            "</svg>",
+        ]
+    )
+    return "".join(elements)
 
 
 def symbol_summary(symbol: str, name: str, frames: dict[str, pd.DataFrame]) -> str:
@@ -267,6 +373,41 @@ def render() -> str:
     }}
     .line-item b {{ color: var(--blue); }}
     .line-item p {{ margin: 6px 0 0; color: #d7dee8; }}
+    .kline {{
+      width: 100%;
+      height: 420px;
+      margin-top: 14px;
+      background: #0b1118;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }}
+    .axis {{ stroke: #303846; stroke-width: 1; }}
+    .axis-label, .date-label {{ fill: #9aa7b2; font-size: 12px; }}
+    .date-label {{ text-anchor: middle; }}
+    .up.wick {{ stroke: #ff5f56; stroke-width: 2; }}
+    .down.wick {{ stroke: #2fbf71; stroke-width: 2; }}
+    .up.body {{ fill: #ff5f56; }}
+    .down.body {{ fill: #2fbf71; }}
+    .volume-bar {{ fill: #607086; opacity: 0.78; }}
+    .oi-line {{ stroke: #f2c94c; stroke-width: 2; }}
+    .price-marker {{ fill: #f2c94c; stroke: #0b1118; stroke-width: 2; }}
+    .price-label, .max-volume-label {{ fill: #e6edf3; font-size: 12px; font-weight: 600; }}
+    .max-volume-line {{ stroke: #f2c94c; stroke-width: 1.4; stroke-dasharray: 6 4; opacity: 0.88; }}
+    .kline line, .kline polyline, .kline text, .kline circle, .kline rect:not(.candle-hit) {{ pointer-events: none; }}
+    .candle-hit {{ fill: transparent; cursor: pointer; pointer-events: all; }}
+    .candle-hit:hover {{ fill: rgba(242, 201, 76, 0.08); }}
+    .kline-detail {{
+      min-height: 38px;
+      border: 1px solid var(--line);
+      background: #0e151e;
+      border-radius: 6px;
+      padding: 9px 10px;
+      margin-top: 8px;
+      color: #c9d1d9;
+      font-size: 13px;
+    }}
+    .kline-detail b {{ color: #e6edf3; margin-right: 10px; }}
+    .kline-detail span {{ display: inline-block; margin-right: 12px; }}
     .level-0 {{ border-left: 4px solid #7b8491; }}
     .level-1 {{ border-left: 4px solid #4cc9f0; }}
     .level-2 {{ border-left: 4px solid #f2c94c; }}
@@ -281,6 +422,23 @@ def render() -> str:
   <main>
     {"".join(blocks)}
   </main>
+  <script>
+    document.addEventListener("click", function (event) {{
+      const target = event.target.closest(".candle-hit");
+      if (!target) return;
+      const detail = document.getElementById("detail-" + target.dataset.chart);
+      if (!detail) return;
+      detail.innerHTML = [
+        "<b>" + target.dataset.time + "</b>",
+        "<span>开盘 " + target.dataset.open + "</span>",
+        "<span>高点 " + target.dataset.high + "</span>",
+        "<span>低点 " + target.dataset.low + "</span>",
+        "<span>收盘 " + target.dataset.close + "</span>",
+        "<span>成交量 " + Number(target.dataset.volume).toLocaleString("zh-CN") + "</span>",
+        "<span>持仓量 " + Number(target.dataset.openInterest).toLocaleString("zh-CN") + "</span>"
+      ].join("");
+    }});
+  </script>
 </body>
 </html>
 """
