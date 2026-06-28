@@ -309,6 +309,8 @@ def build_max_volume_anchor_workflow(timeframe: str, frame: pd.DataFrame) -> lis
             "行情仍围绕锚点区间震荡，等待靠近高点或低点后的量仓确认。"
         )
 
+    alerts.extend(build_state_distance_waiting_alerts(timeframe, frame, after, high, low))
+
     if first_up_break is not None:
         alerts.append(
             f"高点演化：{format_dt(first_up_break['datetime'])} 盘中突破最大量K线高点 {high:.2f}。"
@@ -426,6 +428,136 @@ def build_dynamic_pressure_workflow(timeframe: str, after: pd.DataFrame, anchor_
     if timeframe == "小时线":
         alerts.extend(describe_latest_hourly_decline(after))
     return alerts
+
+
+def build_state_distance_waiting_alerts(
+    timeframe: str,
+    frame: pd.DataFrame,
+    after: pd.DataFrame,
+    anchor_high: float,
+    anchor_low: float,
+) -> list[str]:
+    latest = frame.iloc[-1]
+    first = frame.iloc[0]
+    latest_close = float(latest["close"])
+    close_change = latest_close - float(first["close"])
+    oi_change = float(latest["open_interest"] - first["open_interest"])
+    pressure = anchor_high
+    support = anchor_low
+    if not after.empty and latest_close < anchor_low:
+        pressure = current_pressure_level(after, anchor_low)
+    elif not after.empty and latest_close > anchor_high:
+        support = anchor_high
+    pressure_distance = abs(pressure - latest_close) / latest_close * 100 if latest_close else 999.0
+    support_distance = abs(latest_close - support) / latest_close * 100 if latest_close else 999.0
+    below_ratio = float((after["close"] < anchor_low).sum() / len(after)) if len(after) else 0.0
+    above_ratio = float((after["close"] > anchor_high).sum() / len(after)) if len(after) else 0.0
+    inside_ratio = float(((after["close"] >= anchor_low) & (after["close"] <= anchor_high)).sum() / len(after)) if len(after) else 0.0
+    tags = state_tags(
+        latest_close=latest_close,
+        anchor_high=anchor_high,
+        anchor_low=anchor_low,
+        close_change=close_change,
+        oi_change=oi_change,
+        below_ratio=below_ratio,
+        above_ratio=above_ratio,
+        inside_ratio=inside_ratio,
+        pressure_distance=pressure_distance,
+        support_distance=support_distance,
+    )
+    readiness_level, readiness_text = readiness_from_tags(tags, pressure_distance, support_distance)
+    waiting_reason = waiting_reason_from_state(tags, pressure_distance, support_distance, readiness_level)
+    return [
+        f"状态标签：{'、'.join(tags)}。",
+        (
+            f"距离判断：当前压力观察位 {pressure:.2f}，最新收盘距离压力 {pressure_distance:.2f}%；"
+            f"当前支撑观察位 {support:.2f}，最新收盘距离支撑 {support_distance:.2f}%。"
+        ),
+        f"等待原因：{waiting_reason}",
+        f"交易准备等级：{readiness_text}。",
+    ]
+
+
+def state_tags(
+    *,
+    latest_close: float,
+    anchor_high: float,
+    anchor_low: float,
+    close_change: float,
+    oi_change: float,
+    below_ratio: float,
+    above_ratio: float,
+    inside_ratio: float,
+    pressure_distance: float,
+    support_distance: float,
+) -> list[str]:
+    tags: list[str] = []
+    if latest_close < anchor_low:
+        tags.append("支撑转压力")
+    elif latest_close > anchor_high:
+        tags.append("压力转支撑")
+    else:
+        tags.append("区间拉锯")
+    if close_change < 0 and oi_change > 0:
+        tags.append("空方增仓")
+    elif close_change > 0 and oi_change > 0:
+        tags.append("多方增仓")
+    elif close_change < 0 and oi_change < 0:
+        tags.append("下跌减仓")
+    elif close_change > 0 and oi_change < 0:
+        tags.append("上涨减仓")
+    if below_ratio >= 0.7:
+        tags.append("空方控制延续")
+    elif above_ratio >= 0.7:
+        tags.append("多方控制延续")
+    elif inside_ratio >= 0.45:
+        tags.append("锚点区间拉锯")
+    if min(pressure_distance, support_distance) <= 2:
+        tags.append("接近观察位")
+    else:
+        tags.append("远离观察位")
+    return tags
+
+
+def readiness_from_tags(tags: list[str], pressure_distance: float, support_distance: float) -> tuple[int, str]:
+    if "支撑转压力" in tags:
+        if pressure_distance <= 1:
+            return 3, "3级：位置明确，可制定计划"
+        if pressure_distance <= 2.5:
+            return 2, "2级：反抽确认中"
+        if pressure_distance <= 5:
+            return 1, "1级：接近观察位"
+        return 0, "0级：等待"
+    if "压力转支撑" in tags:
+        if support_distance <= 1:
+            return 3, "3级：位置明确，可制定计划"
+        if support_distance <= 2.5:
+            return 2, "2级：回踩确认中"
+        if support_distance <= 5:
+            return 1, "1级：接近观察位"
+        return 0, "0级：等待"
+    if min(pressure_distance, support_distance) <= 2:
+        return 1, "1级：接近观察位"
+    return 0, "0级：等待"
+
+
+def waiting_reason_from_state(
+    tags: list[str],
+    pressure_distance: float,
+    support_distance: float,
+    readiness_level: int,
+) -> str:
+    if readiness_level == 3:
+        return "位置已经明确，下一步只等待具体触发条件，不提前追价。"
+    if readiness_level in (1, 2):
+        return "价格已接近观察位，但仍需等待该位置的收盘确认，以及成交量和持仓量是否支持。"
+    if "支撑转压力" in tags:
+        return f"价格距离压力观察位 {pressure_distance:.2f}%，位置偏远，等待反抽靠近压力位。"
+    if "压力转支撑" in tags:
+        return f"价格距离支撑观察位 {support_distance:.2f}%，位置偏远，等待回踩靠近支撑位。"
+    if "区间拉锯" in tags:
+        return "价格仍在最大量K线区间内，支撑压力转换没有完成，等待靠近区间边界。"
+    return "当前四维信息没有给出明确观察位置，继续等待。"
 
 
 def describe_latest_hourly_decline(frame: pd.DataFrame, window: int = 20) -> list[str]:

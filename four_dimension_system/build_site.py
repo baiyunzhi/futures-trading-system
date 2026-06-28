@@ -72,7 +72,9 @@ def build_symbol_snapshot(symbol: str, name: str, frames: dict[str, pd.DataFrame
         control = "多方控制"
     else:
         control = "多空拉锯"
-    distance = min(float(daily["pressure_distance_pct"]), float(hourly["pressure_distance_pct"]))
+    pressure_distance = min(float(daily["pressure_distance_pct"]), float(hourly["pressure_distance_pct"]))
+    support_distance = min(float(daily["support_distance_pct"]), float(hourly["support_distance_pct"]))
+    distance = support_distance if long_score > short_score + 3 else pressure_distance
     if control == "空方控制" and distance <= 2:
         action = "优先观察"
         reason = "价格接近支撑转压力位，适合等待反抽失败确认。"
@@ -85,16 +87,25 @@ def build_symbol_snapshot(symbol: str, name: str, frames: dict[str, pd.DataFrame
     else:
         action = "等待方向"
         reason = "多空还在区间内拉锯，支撑压力没有给出明确转换。"
+    readiness_level, readiness_text = build_readiness(control, distance, timeframe_rows)
+    waiting_reasons = build_waiting_reasons(control, distance, timeframe_rows, readiness_level)
+    status_tags = build_symbol_tags(control, distance, timeframe_rows)
     return {
         "symbol": symbol,
         "name": name,
         "control": control,
         "action": action,
         "reason": reason,
+        "readiness_level": readiness_level,
+        "readiness_text": readiness_text,
+        "waiting_reasons": waiting_reasons,
+        "status_tags": status_tags,
         "short_score": short_score,
         "long_score": long_score,
         "timeframes": timeframe_rows,
         "distance": distance,
+        "pressure_distance": pressure_distance,
+        "support_distance": support_distance,
     }
 
 
@@ -142,6 +153,18 @@ def timeframe_score(timeframe: str, frame: pd.DataFrame) -> dict[str, object]:
     if inside_ratio >= 0.45:
         short_score -= 0.5
         long_score -= 0.5
+    status_tags = build_timeframe_tags(
+        close=close,
+        high=high,
+        low=low,
+        close_change=close_change,
+        oi_change=oi_change,
+        below_ratio=below_ratio,
+        above_ratio=above_ratio,
+        inside_ratio=inside_ratio,
+        pressure_distance_pct=pressure_distance_pct,
+        support_distance_pct=support_distance_pct,
+    )
     return {
         "timeframe": timeframe,
         "anchor_time": format_dt(anchor["datetime"]),
@@ -159,12 +182,121 @@ def timeframe_score(timeframe: str, frame: pd.DataFrame) -> dict[str, object]:
         "oi_change": oi_change,
         "short_score": short_score,
         "long_score": long_score,
+        "status_tags": status_tags,
     }
+
+
+def build_timeframe_tags(
+    *,
+    close: float,
+    high: float,
+    low: float,
+    close_change: float,
+    oi_change: float,
+    below_ratio: float,
+    above_ratio: float,
+    inside_ratio: float,
+    pressure_distance_pct: float,
+    support_distance_pct: float,
+) -> list[str]:
+    tags = []
+    if close < low:
+        tags.append("支撑转压力")
+    elif close > high:
+        tags.append("压力转支撑")
+    else:
+        tags.append("区间拉锯")
+    if close_change < 0 and oi_change > 0:
+        tags.append("空方增仓")
+    elif close_change > 0 and oi_change > 0:
+        tags.append("多方增仓")
+    elif close_change < 0 and oi_change < 0:
+        tags.append("下跌减仓")
+    elif close_change > 0 and oi_change < 0:
+        tags.append("上涨减仓")
+    if below_ratio >= 0.7:
+        tags.append("空方控制延续")
+    elif above_ratio >= 0.7:
+        tags.append("多方控制延续")
+    elif inside_ratio >= 0.45:
+        tags.append("锚点区间拉锯")
+    if min(pressure_distance_pct, support_distance_pct) <= 2:
+        tags.append("接近观察位")
+    else:
+        tags.append("远离观察位")
+    return tags
+
+
+def build_symbol_tags(control: str, distance: float, rows: list[dict[str, object]]) -> list[str]:
+    tags = [control]
+    if any("支撑转压力" in row["status_tags"] for row in rows):
+        tags.append("支撑转压力")
+    if any("压力转支撑" in row["status_tags"] for row in rows):
+        tags.append("压力转支撑")
+    if all("空方增仓" in row["status_tags"] for row in rows):
+        tags.append("三周期空方增仓")
+    elif all("多方增仓" in row["status_tags"] for row in rows):
+        tags.append("三周期多方增仓")
+    if distance <= 2:
+        tags.append("接近观察位")
+    else:
+        tags.append("远离观察位")
+    return tags
+
+
+def build_readiness(control: str, distance: float, rows: list[dict[str, object]]) -> tuple[int, str]:
+    has_pressure_shift = any("支撑转压力" in row["status_tags"] for row in rows)
+    has_support_shift = any("压力转支撑" in row["status_tags"] for row in rows)
+    if control == "空方控制" and has_pressure_shift:
+        if distance <= 1:
+            return 3, "3级：位置明确，可制定计划"
+        if distance <= 2.5:
+            return 2, "2级：反抽确认中"
+        if distance <= 5:
+            return 1, "1级：接近观察位"
+        return 0, "0级：等待"
+    if control == "多方控制" and has_support_shift:
+        if distance <= 1:
+            return 3, "3级：位置明确，可制定计划"
+        if distance <= 2.5:
+            return 2, "2级：回踩确认中"
+        if distance <= 5:
+            return 1, "1级：接近观察位"
+        return 0, "0级：等待"
+    if distance <= 2:
+        return 1, "1级：接近观察位"
+    return 0, "0级：等待"
+
+
+def build_waiting_reasons(
+    control: str,
+    distance: float,
+    rows: list[dict[str, object]],
+    readiness_level: int,
+) -> list[str]:
+    reasons = []
+    if readiness_level == 0:
+        if control == "空方控制" and distance > 2:
+            reasons.append(f"当前价格距离最近压力观察位 {distance:.2f}%，不适合追空，等待反抽靠近压力位。")
+        elif control == "多方控制" and distance > 2:
+            reasons.append(f"当前价格距离最近支撑观察位 {distance:.2f}%，不适合追多，等待回踩靠近支撑位。")
+        else:
+            reasons.append("当前没有靠近明确支撑/压力观察位。")
+    if control == "多空拉锯":
+        reasons.append("多空仍在最大量K线区间内拉锯，支撑压力转换没有完成。")
+    if readiness_level in (1, 2):
+        reasons.append("已接近观察位，但仍需等待K线在该位置收盘确认，以及成交量和持仓量是否支持。")
+    if readiness_level == 3:
+        reasons.append("位置已经明确，下一步只等待开仓计划所需的具体触发条件。")
+    if not any(("空方增仓" in row["status_tags"]) or ("多方增仓" in row["status_tags"]) for row in rows):
+        reasons.append("持仓量没有明显支持单边控制，暂不提高准备等级。")
+    return reasons
 
 
 def comparison_card(snapshot: dict[str, object]) -> str:
     rows = []
     for row in snapshot["timeframes"]:
+        tag_html = "".join(f'<span class="tag">{escape(tag)}</span>' for tag in row["status_tags"])
         rows.append(
             "<li>"
             f"{escape(str(row['timeframe']))}：最大量K线 {escape(str(row['anchor_time']))}，"
@@ -172,17 +304,24 @@ def comparison_card(snapshot: dict[str, object]) -> str:
             f"最新收盘 {float(row['latest_close']):.2f}，"
             f"收在锚点低点下方占比 {float(row['below_ratio']) * 100:.1f}%，"
             f"持仓变化 {float(row['oi_change']):+.0f}，"
-            f"距离当前压力位 {float(row['pressure_distance_pct']):.2f}%。"
+            f"距离当前压力位 {float(row['pressure_distance_pct']):.2f}%，"
+            f"距离当前支撑位 {float(row['support_distance_pct']):.2f}%。"
+            f'<div class="tag-row">{tag_html}</div>'
             "</li>"
         )
+    symbol_tags = "".join(f'<span class="tag">{escape(tag)}</span>' for tag in snapshot["status_tags"])
+    waiting_rows = "".join(f"<li>{escape(reason)}</li>" for reason in snapshot["waiting_reasons"])
     return f"""
       <article class="comparison-card">
         <div class="comparison-title">
           <h3>{escape(str(snapshot["name"]))}({escape(str(snapshot["symbol"]))})</h3>
           <span>{escape(str(snapshot["control"]))}</span>
         </div>
+        <div class="tag-row">{symbol_tags}</div>
+        <p class="readiness">{escape(str(snapshot["readiness_text"]))}</p>
         <p class="comparison-action">{escape(str(snapshot["action"]))}</p>
         <p>{escape(str(snapshot["reason"]))}</p>
+        <div class="wait-box"><b>等待原因</b><ul>{waiting_rows}</ul></div>
         <ul>{''.join(rows)}</ul>
       </article>
     """
@@ -478,6 +617,45 @@ def render_html(reports, data: dict[str, pd.DataFrame]) -> str:
       color: var(--blue);
       font-weight: 700;
       margin: 0 0 6px;
+    }}
+    .readiness {{
+      color: var(--warn);
+      font-weight: 700;
+      margin: 8px 0 6px;
+    }}
+    .tag-row {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 8px 0;
+    }}
+    .tag {{
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid #314055;
+      background: #121b28;
+      color: #d7dee8;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: nowrap;
+    }}
+    .wait-box {{
+      border: 1px solid #2f3a49;
+      background: #101722;
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin: 10px 0 12px;
+    }}
+    .wait-box b {{
+      color: var(--warn);
+      display: block;
+      margin-bottom: 6px;
+    }}
+    .wait-box ul {{
+      padding-left: 18px;
+      margin: 0;
     }}
     .comparison-card p {{
       color: #c9d1d9;
