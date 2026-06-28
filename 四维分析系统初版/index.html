@@ -24,12 +24,12 @@
       line-height: 1.55;
     }
     header {
-      padding: 24px 28px 14px;
+      padding: 18px 28px 12px;
       border-bottom: 1px solid var(--line);
       background: #0e141c;
     }
-    h1 { margin: 0 0 8px; font-size: 24px; }
-    .note { margin: 0; color: var(--muted); }
+    h1 { margin: 0 0 4px; font-size: 24px; }
+    .note { margin: 0; color: var(--muted); font-size: 13px; }
     main {
       padding: 18px 28px 44px;
       display: grid;
@@ -50,30 +50,61 @@
       border: 1px solid var(--line);
       background: #0e141c;
       border-radius: 8px;
-      padding: 16px;
+      padding: 14px 16px;
+    }
+    .selection-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: start;
+      margin-bottom: 12px;
     }
     .selection-module h2 {
-      margin: 0 0 8px;
+      margin: 0 0 5px;
       font-size: 18px;
     }
-    .selection-module .sub-title {
-      margin-top: 16px;
+    .selection-module h3 {
+      margin: 0 0 8px;
+      color: #c9d1d9;
+      font-size: 13px;
     }
     .selection-module p {
-      margin: 0 0 12px;
+      margin: 0;
       color: #d7dee8;
-      font-size: 14px;
+      font-size: 13px;
+    }
+    .workflow-steps {
+      display: grid;
+      grid-template-columns: repeat(4, max-content);
+      gap: 6px;
+      white-space: nowrap;
+    }
+    .workflow-steps span {
+      border: 1px solid #314055;
+      background: #111821;
+      border-radius: 999px;
+      color: #d7dee8;
+      padding: 4px 9px;
+      font-size: 12px;
+    }
+    .selection-columns {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 14px;
     }
     .selection-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(260px, 1fr));
-      gap: 10px;
+      grid-template-columns: repeat(2, minmax(180px, 1fr));
+      gap: 8px;
+    }
+    .event-grid {
+      grid-template-columns: repeat(2, minmax(190px, 1fr));
     }
     .selection-card {
       border: 1px solid #314055;
       background: #111821;
       border-radius: 6px;
-      padding: 10px 12px;
+      padding: 8px 10px;
     }
     .selection-card b {
       color: var(--blue);
@@ -82,7 +113,7 @@
     .selection-card p {
       margin: 6px 0 0;
       color: #c9d1d9;
-      font-size: 13px;
+      font-size: 12px;
     }
     .period-card {
       border: 1px solid var(--line);
@@ -124,8 +155,8 @@
     }
     .period-layout {
       display: grid;
-      grid-template-columns: minmax(0, 3fr) minmax(230px, 1fr);
-      gap: 14px;
+      grid-template-columns: minmax(0, 7fr) minmax(340px, 3fr);
+      gap: 16px;
       align-items: start;
     }
     .chart-pane,
@@ -134,15 +165,33 @@
     }
     .info-pane {
       border-left: 1px solid var(--line);
-      padding-left: 14px;
+      padding-left: 16px;
     }
     .line-item {
       border-top: 1px solid var(--line);
-      padding: 8px 0 0;
-      margin-top: 8px;
+      padding: 9px 0 0;
+      margin-top: 9px;
+      display: grid;
+      grid-template-columns: 86px minmax(0, 1fr);
+      gap: 10px;
     }
-    .line-item b { color: var(--blue); }
-    .line-item p { margin: 5px 0 0; color: #d7dee8; font-size: 13px; }
+    .line-item b {
+      color: var(--blue);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .line-item b span {
+      display: inline-grid;
+      place-items: center;
+      width: 20px;
+      height: 20px;
+      margin-right: 6px;
+      border-radius: 999px;
+      background: #102536;
+      border: 1px solid #25516d;
+      color: #e6edf3;
+    }
+    .line-item p { margin: 0; color: #d7dee8; font-size: 12px; line-height: 1.55; }
     .kline {
       width: 100%;
       height: 560px;
@@ -194,6 +243,14 @@
       main {
         padding: 14px;
       }
+      .selection-head,
+      .selection-columns {
+        grid-template-columns: 1fr;
+        display: grid;
+      }
+      .workflow-steps {
+        grid-template-columns: repeat(2, max-content);
+      }
       .period-layout {
         grid-template-columns: 1fr;
       }
@@ -205,6 +262,10 @@
         border-top: 1px solid var(--line);
         padding-left: 0;
         padding-top: 12px;
+      }
+      .line-item {
+        grid-template-columns: 1fr;
+        gap: 5px;
       }
       .kline {
         height: 440px;
@@ -220,12 +281,22 @@
   <main>
     
       <section class="selection-module">
-        <h2>品种选择工作流</h2>
-        <p>
-          当前按四维弱势排序，最优先观察 PVC(V0)。
-          工作流顺序：先确定最弱或最强品种，再看当前观察位，再等待反抽或回踩，最后只在风险收益比合格时进入准备。
-        </p>
-        <div class="selection-grid">
+        <div class="selection-head">
+          <div>
+            <h2>品种选择工作流</h2>
+            <p>当前最优先观察 PVC(V0)：先选强弱，再看观察位，再等反抽/回踩，最后看风险收益比。</p>
+          </div>
+          <div class="workflow-steps">
+            <span>1 选品</span>
+            <span>2 定位</span>
+            <span>3 等待</span>
+            <span>4 准备</span>
+          </div>
+        </div>
+        <div class="selection-columns">
+          <div>
+            <h3>强弱排序</h3>
+            <div class="selection-grid">
             <section class="selection-card">
               <b>A类优先 · PVC(V0)</b>
               <p>日线两个月收盘变化 -16.07%，动态观察位 3 层，持仓变化 498629。</p>
@@ -236,11 +307,10 @@
               <p>日线两个月收盘变化 -3.04%，动态观察位 1 层，持仓变化 111042。</p>
             </section>
             </div>
-        <h2 class="sub-title">跨周期放量事件队列</h2>
-        <p>
-          成交量最大K线是观察起点；不同周期的放量事件先进入同一队列，再回到各自周期观察后续支撑、压力和持仓变化。
-        </p>
-        <div class="selection-grid">
+          </div>
+          <div>
+            <h3>跨周期放量事件</h3>
+            <div class="selection-grid event-grid">
             <section class="selection-card event-card">
               <b>PVC(V0) · 周线</b>
               <p>2026-05-15 00:00，成交量 5500592，区间 5024.00-5257.00。</p>
@@ -261,6 +331,8 @@
               <p>2026-05-26 00:00，成交量 1515821，区间 3138.00-3218.00。</p>
             </section>
             </div>
+          </div>
+        </div>
       </section>
     <h2 class="period-group-title">日线对比</h2>
 
@@ -278,31 +350,31 @@
             <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">锚点区间拉锯</span><span class="tag">接近当前压力位</span><span class="tag">支撑转压力</span><span class="tag">原锚点有效</span><span class="tag">异常放量事件</span><span class="tag">锚点减仓</span><span class="tag">压力位空方防守</span><span class="tag">B类备选</span></div>
             
       <section class="line-item">
-        <b>1. 当前状态</b>
+        <b><span>1</span>当前状态</b>
         <p>空方控制。锚点后收在低点下方占比 27.3%，收在高点上方占比 0.0%，收在区间内占比 72.7%。当前压力距离 1.45%，当前支撑距离 0.42%。价格下移、持仓增加，空方主动参与增加。</p>
       </section>
     
             
       <section class="line-item">
-        <b>2. 当前观察位</b>
+        <b><span>2</span>当前观察位</b>
         <p>压力 3138.00，距最新收盘 1.45%；支撑 3080.00，距最新收盘 0.42%。最大量K线 2026-05-26 00:00，区间 3138.00-3218.00。最大量K线性质：收阴，实体收阴，说明该周期空方推进更主动；成交量为本周期最大，是次大量的 1.28 倍。持仓较前一根减少 59188，说明这根放量包含持仓退出。观察位链条：3138.00。当前按最近失守位 3138.00 作为压力观察位。 当前下方未确认支撑为 3080.00。当前仍以原最大成交量K线作为观察锚点。</p>
       </section>
     
             
       <section class="line-item">
-        <b>3. 等待原因</b>
+        <b><span>3</span>等待原因</b>
         <p>价格已接近当前压力观察位，等待收盘不能重新站回，同时观察成交量和持仓量是否不支持上攻。锚点提示：原锚点仍有效，继续观察其高低点的支撑压力转换。量仓确认：当前在压力观察位附近，成交量缩小、持仓增加。反抽未站回压力位且持仓增加，空方仍在压力位附近参与。</p>
       </section>
     
             
       <section class="line-item">
-        <b>4. 准备等级</b>
+        <b><span>4</span>准备等级</b>
         <p>2级：反抽确认中 品种优先级 B类备选，排名第 2；日线两个月收盘变化 -3.04%，动态观察位 1 层，持仓变化 111042。</p>
       </section>
     
             
       <section class="line-item">
-        <b>5. 失效条件</b>
+        <b><span>5</span>失效条件</b>
         <p>若后续收盘重新站回当前压力观察位 3138.00 上方，并且成交量、持仓量支持上攻，则当前压力位失效；系统回看上一层压力或等待新锚点。</p>
       </section>
     
@@ -325,31 +397,31 @@
             <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">远离当前压力位</span><span class="tag">动态观察位下移</span><span class="tag">原锚点有效</span><span class="tag">异常放量事件</span><span class="tag">锚点增仓</span><span class="tag">远离观察位待确认</span><span class="tag">弱势震荡</span><span class="tag">风险收益合格</span><span class="tag">A类优先</span></div>
             
       <section class="line-item">
-        <b>1. 当前状态</b>
+        <b><span>1</span>当前状态</b>
         <p>空方控制，观察位已下移到 4652.00。锚点后收在低点下方占比 96.7%，收在高点上方占比 0.0%，收在区间内占比 3.3%。当前压力距离 6.02%，当前支撑距离 0.07%。价格下移、持仓增加，空方主动参与增加。</p>
       </section>
     
             
       <section class="line-item">
-        <b>2. 当前观察位</b>
+        <b><span>2</span>当前观察位</b>
         <p>压力 4652.00，距最新收盘 6.02%；支撑 4385.00，距最新收盘 0.07%。最大量K线 2026-05-14 00:00，区间 5054.00-5257.00。最大量K线性质：收阴，实体收阴，说明该周期空方推进更主动；成交量为本周期最大，是次大量的 1.23 倍。持仓较前一根增加 72771，说明这根放量包含新资金参与。观察位链条：5054.00 → 4804.00 → 4652.00。当前按最近失守位 4652.00 作为压力观察位。 当前下方未确认支撑为 4385.00。当前仍以原最大成交量K线作为观察锚点。</p>
       </section>
     
             
       <section class="line-item">
-        <b>3. 等待原因</b>
+        <b><span>3</span>等待原因</b>
         <p>当前价格距离最近压力观察位 6.02%，不适合追空，等待反抽靠近当前压力位。锚点提示：原锚点仍有效，继续观察其高低点的支撑压力转换。量仓确认：当前未贴近最近观察位；最新一根成交量缩小、持仓增加，只能说明当下态度，不能作为支撑/压力确认。弱势震荡观察：2026-06-23 00:00 前低 4439.00 被跌破前，价格在 4529.00-4540.00 附近反抽停滞；再次跌破后，该前低成为新压力观察位。</p>
       </section>
     
             
       <section class="line-item">
-        <b>4. 准备等级</b>
+        <b><span>4</span>准备等级</b>
         <p>0级：等待 品种优先级 A类优先，排名第 1；日线两个月收盘变化 -16.07%，动态观察位 3 层，持仓变化 498629。 若只在反抽 4529.00 附近试空，止损放在 4541.00 上方，第一目标 4439.00，风险收益比约 1:7.5；扩展到最新低点 4385.00 约 1:12.0。当前位置若已远离反抽区，只等待，不追空。</p>
       </section>
     
             
       <section class="line-item">
-        <b>5. 失效条件</b>
+        <b><span>5</span>失效条件</b>
         <p>若后续收盘重新站回当前压力观察位 4652.00 上方，并且成交量、持仓量支持上攻，则当前压力位失效；系统回看上一层压力或等待新锚点。</p>
       </section>
     
@@ -373,31 +445,31 @@
             <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">锚点区间拉锯</span><span class="tag">接近当前压力位</span><span class="tag">支撑转压力</span><span class="tag">候选新锚点</span><span class="tag">周期最大量事件</span><span class="tag">锚点减仓</span><span class="tag">压力位空方防守</span><span class="tag">B类备选</span></div>
             
       <section class="line-item">
-        <b>1. 当前状态</b>
+        <b><span>1</span>当前状态</b>
         <p>空方控制。锚点后收在低点下方占比 50.0%，收在高点上方占比 0.0%，收在区间内占比 50.0%。当前压力距离 1.39%，当前支撑距离 0.42%。价格下移、持仓增加，空方主动参与增加。</p>
       </section>
     
             
       <section class="line-item">
-        <b>2. 当前观察位</b>
+        <b><span>2</span>当前观察位</b>
         <p>压力 3136.00，距最新收盘 1.39%；支撑 3080.00，距最新收盘 0.42%。最大量K线 2026-05-29 00:00，区间 3136.00-3238.00。最大量K线性质：收阴，小实体，说明多空在该区间激烈换手后暂未分出明显胜负；成交量为本周期最大，是次大量的 1.02 倍。持仓较前一根减少 75408，说明这根放量包含持仓退出。观察位链条：3136.00。当前按最近失守位 3136.00 作为压力观察位。 当前下方未确认支撑为 3080.00。候选新锚点 2026-06-12 00:00，成交量为原锚点的 78.6%，区间 3142.00-3194.00。</p>
       </section>
     
             
       <section class="line-item">
-        <b>3. 等待原因</b>
+        <b><span>3</span>等待原因</b>
         <p>价格已接近当前压力观察位，等待收盘不能重新站回，同时观察成交量和持仓量是否不支持上攻。锚点提示：后续观察价格是否继续围绕候选新锚点高低点波动，确认后再替换原锚点。量仓确认：当前在压力观察位附近，成交量放大、持仓增加。反抽未站回压力位且持仓增加，空方仍在压力位附近参与。</p>
       </section>
     
             
       <section class="line-item">
-        <b>4. 准备等级</b>
+        <b><span>4</span>准备等级</b>
         <p>2级：反抽确认中 品种优先级 B类备选，排名第 2；日线两个月收盘变化 -3.04%，动态观察位 1 层，持仓变化 111042。</p>
       </section>
     
             
       <section class="line-item">
-        <b>5. 失效条件</b>
+        <b><span>5</span>失效条件</b>
         <p>若后续收盘重新站回当前压力观察位 3136.00 上方，并且成交量、持仓量支持上攻，则当前压力位失效；系统回看上一层压力或等待新锚点。</p>
       </section>
     
@@ -420,31 +492,31 @@
             <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">远离当前压力位</span><span class="tag">支撑转压力</span><span class="tag">候选新锚点</span><span class="tag">周期最大量事件</span><span class="tag">锚点增仓</span><span class="tag">远离观察位待确认</span><span class="tag">A类优先</span></div>
             
       <section class="line-item">
-        <b>1. 当前状态</b>
+        <b><span>1</span>当前状态</b>
         <p>空方控制。锚点后收在低点下方占比 100.0%，收在高点上方占比 0.0%，收在区间内占比 0.0%。当前压力距离 14.49%，当前支撑距离 0.07%。价格下移、持仓增加，空方主动参与增加。</p>
       </section>
     
             
       <section class="line-item">
-        <b>2. 当前观察位</b>
+        <b><span>2</span>当前观察位</b>
         <p>压力 5024.00，距最新收盘 14.49%；支撑 4385.00，距最新收盘 0.07%。最大量K线 2026-05-15 00:00，区间 5024.00-5257.00。最大量K线性质：收阴，长上影，说明上方抛压或空方反击明显；成交量为本周期最大，是次大量的 1.03 倍。持仓较前一根增加 61790，说明这根放量包含新资金参与。观察位链条：5024.00。当前按最近失守位 5024.00 作为压力观察位。 当前下方未确认支撑为 4385.00。候选新锚点 2026-05-22 00:00，成交量为原锚点的 97.2%，区间 4804.00-5144.00。</p>
       </section>
     
             
       <section class="line-item">
-        <b>3. 等待原因</b>
+        <b><span>3</span>等待原因</b>
         <p>当前价格距离最近压力观察位 14.49%，不适合追空，等待反抽靠近当前压力位。锚点提示：后续观察价格是否继续围绕候选新锚点高低点波动，确认后再替换原锚点。量仓确认：当前未贴近最近观察位；最新一根成交量放大、持仓增加，只能说明当下态度，不能作为支撑/压力确认。</p>
       </section>
     
             
       <section class="line-item">
-        <b>4. 准备等级</b>
+        <b><span>4</span>准备等级</b>
         <p>0级：等待 品种优先级 A类优先，排名第 1；日线两个月收盘变化 -16.07%，动态观察位 3 层，持仓变化 498629。</p>
       </section>
     
             
       <section class="line-item">
-        <b>5. 失效条件</b>
+        <b><span>5</span>失效条件</b>
         <p>若后续收盘重新站回当前压力观察位 5024.00 上方，并且成交量、持仓量支持上攻，则当前压力位失效；系统回看上一层压力或等待新锚点。</p>
       </section>
     
@@ -468,31 +540,31 @@
             <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">接近当前压力位</span><span class="tag">动态观察位下移</span><span class="tag">原锚点有效</span><span class="tag">周期最大量事件</span><span class="tag">锚点减仓</span><span class="tag">压力位反抽无力</span><span class="tag">B类备选</span></div>
             
       <section class="line-item">
-        <b>1. 当前状态</b>
+        <b><span>1</span>当前状态</b>
         <p>空方控制，观察位已下移到 3114.00。锚点后收在低点下方占比 90.5%，收在高点上方占比 0.0%，收在区间内占比 9.5%。当前压力距离 0.87%，当前支撑距离 0.23%。价格下移、持仓增加，空方主动参与增加。</p>
       </section>
     
             
       <section class="line-item">
-        <b>2. 当前观察位</b>
+        <b><span>2</span>当前观察位</b>
         <p>压力 3114.00，距最新收盘 0.87%；支撑 3080.00，距最新收盘 0.23%。最大量K线 2026-05-25 22:00，区间 3181.00-3217.00。最大量K线性质：收阴，实体收阴，说明该周期空方推进更主动；成交量为本周期最大，是次大量的 1.07 倍。持仓较前一根减少 2087，说明这根放量包含持仓退出。观察位链条：3181.00 → 3140.00 → 3114.00。当前按最近失守位 3114.00 作为压力观察位。 当前下方未确认支撑为 3080.00。当前仍以原最大成交量K线作为观察锚点。</p>
       </section>
     
             
       <section class="line-item">
-        <b>3. 等待原因</b>
+        <b><span>3</span>等待原因</b>
         <p>当前压力观察位已经明确，下一步只等待具体触发条件，不提前追价。锚点提示：原锚点仍有效，继续观察其高低点的支撑压力转换。量仓确认：当前在压力观察位附近，成交量缩小、持仓减少。反抽没有得到成交量和持仓量支持，压力位继续有效。</p>
       </section>
     
             
       <section class="line-item">
-        <b>4. 准备等级</b>
+        <b><span>4</span>准备等级</b>
         <p>3级：位置明确，可制定计划 品种优先级 B类备选，排名第 2；日线两个月收盘变化 -3.04%，动态观察位 1 层，持仓变化 111042。</p>
       </section>
     
             
       <section class="line-item">
-        <b>5. 失效条件</b>
+        <b><span>5</span>失效条件</b>
         <p>若后续收盘重新站回当前压力观察位 3114.00 上方，并且成交量、持仓量支持上攻，则当前压力位失效；系统回看上一层压力或等待新锚点。</p>
       </section>
     
@@ -515,31 +587,31 @@
             <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">接近当前压力位</span><span class="tag">动态观察位下移</span><span class="tag">原锚点有效</span><span class="tag">异常放量事件</span><span class="tag">锚点增仓</span><span class="tag">压力位反抽无力</span><span class="tag">A类优先</span></div>
             
       <section class="line-item">
-        <b>1. 当前状态</b>
+        <b><span>1</span>当前状态</b>
         <p>空方控制，观察位已下移到 4440.00。锚点后收在低点下方占比 100.0%，收在高点上方占比 0.0%，收在区间内占比 0.0%。当前压力距离 1.32%，当前支撑距离 0.27%。价格下移、持仓增加，空方主动参与增加。</p>
       </section>
     
             
       <section class="line-item">
-        <b>2. 当前观察位</b>
+        <b><span>2</span>当前观察位</b>
         <p>压力 4440.00，距最新收盘 1.32%；支撑 4370.00，距最新收盘 0.27%。最大量K线 2026-05-13 22:00，区间 5162.00-5256.00。最大量K线性质：收阴，实体收阴，说明该周期空方推进更主动；成交量为本周期最大，是次大量的 1.39 倍。持仓较前一根增加 54157，说明这根放量包含新资金参与。观察位链条：5162.00 → 4722.00 → 4668.00 → 4624.00 → 4440.00。当前按最近失守位 4440.00 作为压力观察位。 当前下方未确认支撑为 4370.00。当前仍以原最大成交量K线作为观察锚点。</p>
       </section>
     
             
       <section class="line-item">
-        <b>3. 等待原因</b>
+        <b><span>3</span>等待原因</b>
         <p>价格已接近当前压力观察位，等待收盘不能重新站回，同时观察成交量和持仓量是否不支持上攻。锚点提示：原锚点仍有效，继续观察其高低点的支撑压力转换。量仓确认：当前在压力观察位附近，成交量缩小、持仓减少。反抽没有得到成交量和持仓量支持，压力位继续有效。</p>
       </section>
     
             
       <section class="line-item">
-        <b>4. 准备等级</b>
+        <b><span>4</span>准备等级</b>
         <p>2级：反抽确认中 品种优先级 A类优先，排名第 1；日线两个月收盘变化 -16.07%，动态观察位 3 层，持仓变化 498629。</p>
       </section>
     
             
       <section class="line-item">
-        <b>5. 失效条件</b>
+        <b><span>5</span>失效条件</b>
         <p>若后续收盘重新站回当前压力观察位 4440.00 上方，并且成交量、持仓量支持上攻，则当前压力位失效；系统回看上一层压力或等待新锚点。</p>
       </section>
     

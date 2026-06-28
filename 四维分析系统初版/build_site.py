@@ -712,9 +712,10 @@ def build_invalidation(
 
 
 def line_item(title: str, body: str) -> str:
+    number, label = title.split(". ", 1) if ". " in title else ("", title)
     return f"""
       <section class="line-item">
-        <b>{escape(title)}</b>
+        <b><span>{escape(number)}</span>{escape(label)}</b>
         <p>{escape(body)}</p>
       </section>
     """
@@ -918,17 +919,28 @@ def build_selection_module(
         )
     return f"""
       <section class="selection-module">
-        <h2>品种选择工作流</h2>
-        <p>
-          当前按四维弱势排序，最优先观察 {escape(str(leader['name']))}({escape(str(leader['symbol']))})。
-          工作流顺序：先确定最弱或最强品种，再看当前观察位，再等待反抽或回踩，最后只在风险收益比合格时进入准备。
-        </p>
-        <div class="selection-grid">{''.join(cards)}</div>
-        <h2 class="sub-title">跨周期放量事件队列</h2>
-        <p>
-          成交量最大K线是观察起点；不同周期的放量事件先进入同一队列，再回到各自周期观察后续支撑、压力和持仓变化。
-        </p>
-        <div class="selection-grid">{''.join(event_items)}</div>
+        <div class="selection-head">
+          <div>
+            <h2>品种选择工作流</h2>
+            <p>当前最优先观察 {escape(str(leader['name']))}({escape(str(leader['symbol']))})：先选强弱，再看观察位，再等反抽/回踩，最后看风险收益比。</p>
+          </div>
+          <div class="workflow-steps">
+            <span>1 选品</span>
+            <span>2 定位</span>
+            <span>3 等待</span>
+            <span>4 准备</span>
+          </div>
+        </div>
+        <div class="selection-columns">
+          <div>
+            <h3>强弱排序</h3>
+            <div class="selection-grid">{''.join(cards)}</div>
+          </div>
+          <div>
+            <h3>跨周期放量事件</h3>
+            <div class="selection-grid event-grid">{''.join(event_items)}</div>
+          </div>
+        </div>
       </section>
     """
 
@@ -982,12 +994,12 @@ def render() -> str:
       line-height: 1.55;
     }}
     header {{
-      padding: 24px 28px 14px;
+      padding: 18px 28px 12px;
       border-bottom: 1px solid var(--line);
       background: #0e141c;
     }}
-    h1 {{ margin: 0 0 8px; font-size: 24px; }}
-    .note {{ margin: 0; color: var(--muted); }}
+    h1 {{ margin: 0 0 4px; font-size: 24px; }}
+    .note {{ margin: 0; color: var(--muted); font-size: 13px; }}
     main {{
       padding: 18px 28px 44px;
       display: grid;
@@ -1008,30 +1020,61 @@ def render() -> str:
       border: 1px solid var(--line);
       background: #0e141c;
       border-radius: 8px;
-      padding: 16px;
+      padding: 14px 16px;
+    }}
+    .selection-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: start;
+      margin-bottom: 12px;
     }}
     .selection-module h2 {{
-      margin: 0 0 8px;
+      margin: 0 0 5px;
       font-size: 18px;
     }}
-    .selection-module .sub-title {{
-      margin-top: 16px;
+    .selection-module h3 {{
+      margin: 0 0 8px;
+      color: #c9d1d9;
+      font-size: 13px;
     }}
     .selection-module p {{
-      margin: 0 0 12px;
+      margin: 0;
       color: #d7dee8;
-      font-size: 14px;
+      font-size: 13px;
+    }}
+    .workflow-steps {{
+      display: grid;
+      grid-template-columns: repeat(4, max-content);
+      gap: 6px;
+      white-space: nowrap;
+    }}
+    .workflow-steps span {{
+      border: 1px solid #314055;
+      background: #111821;
+      border-radius: 999px;
+      color: #d7dee8;
+      padding: 4px 9px;
+      font-size: 12px;
+    }}
+    .selection-columns {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 14px;
     }}
     .selection-grid {{
       display: grid;
-      grid-template-columns: repeat(2, minmax(260px, 1fr));
-      gap: 10px;
+      grid-template-columns: repeat(2, minmax(180px, 1fr));
+      gap: 8px;
+    }}
+    .event-grid {{
+      grid-template-columns: repeat(2, minmax(190px, 1fr));
     }}
     .selection-card {{
       border: 1px solid #314055;
       background: #111821;
       border-radius: 6px;
-      padding: 10px 12px;
+      padding: 8px 10px;
     }}
     .selection-card b {{
       color: var(--blue);
@@ -1040,7 +1083,7 @@ def render() -> str:
     .selection-card p {{
       margin: 6px 0 0;
       color: #c9d1d9;
-      font-size: 13px;
+      font-size: 12px;
     }}
     .period-card {{
       border: 1px solid var(--line);
@@ -1082,8 +1125,8 @@ def render() -> str:
     }}
     .period-layout {{
       display: grid;
-      grid-template-columns: minmax(0, 3fr) minmax(230px, 1fr);
-      gap: 14px;
+      grid-template-columns: minmax(0, 7fr) minmax(340px, 3fr);
+      gap: 16px;
       align-items: start;
     }}
     .chart-pane,
@@ -1092,15 +1135,33 @@ def render() -> str:
     }}
     .info-pane {{
       border-left: 1px solid var(--line);
-      padding-left: 14px;
+      padding-left: 16px;
     }}
     .line-item {{
       border-top: 1px solid var(--line);
-      padding: 8px 0 0;
-      margin-top: 8px;
+      padding: 9px 0 0;
+      margin-top: 9px;
+      display: grid;
+      grid-template-columns: 86px minmax(0, 1fr);
+      gap: 10px;
     }}
-    .line-item b {{ color: var(--blue); }}
-    .line-item p {{ margin: 5px 0 0; color: #d7dee8; font-size: 13px; }}
+    .line-item b {{
+      color: var(--blue);
+      font-size: 12px;
+      line-height: 1.35;
+    }}
+    .line-item b span {{
+      display: inline-grid;
+      place-items: center;
+      width: 20px;
+      height: 20px;
+      margin-right: 6px;
+      border-radius: 999px;
+      background: #102536;
+      border: 1px solid #25516d;
+      color: #e6edf3;
+    }}
+    .line-item p {{ margin: 0; color: #d7dee8; font-size: 12px; line-height: 1.55; }}
     .kline {{
       width: 100%;
       height: 560px;
@@ -1152,6 +1213,14 @@ def render() -> str:
       main {{
         padding: 14px;
       }}
+      .selection-head,
+      .selection-columns {{
+        grid-template-columns: 1fr;
+        display: grid;
+      }}
+      .workflow-steps {{
+        grid-template-columns: repeat(2, max-content);
+      }}
       .period-layout {{
         grid-template-columns: 1fr;
       }}
@@ -1163,6 +1232,10 @@ def render() -> str:
         border-top: 1px solid var(--line);
         padding-left: 0;
         padding-top: 12px;
+      }}
+      .line-item {{
+        grid-template-columns: 1fr;
+        gap: 5px;
       }}
       .kline {{
         height: 440px;
