@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from html import escape
 
 import pandas as pd
 
@@ -11,11 +12,6 @@ ROOT = Path(__file__).resolve().parent
 DAILY_DATA_PATH = ROOT / "rb_recent_daily.csv"
 HOURLY_DATA_PATH = ROOT / "rb_recent_hourly.csv"
 WEB_PATH = ROOT / "web" / "index.html"
-
-
-def td(value: object, cls: str = "") -> str:
-    klass = f' class="{cls}"' if cls else ""
-    return f"<td{klass}>{value}</td>"
 
 
 def build_timeframe_sections(reports, data: dict[str, pd.DataFrame]) -> str:
@@ -31,6 +27,7 @@ def build_timeframe_sections(reports, data: dict[str, pd.DataFrame]) -> str:
         for timeframe in TIMEFRAMES:
             frame = frames[timeframe].copy()
             view = report.views[timeframe]
+            chart_id = f"{symbol}-{timeframe}"
             blocks.append(
                 f"""
                 <section class="period">
@@ -38,33 +35,15 @@ def build_timeframe_sections(reports, data: dict[str, pd.DataFrame]) -> str:
                     <h2>{meta["name"]}({symbol}) · {timeframe}</h2>
                     <p>{view.summary}</p>
                   </div>
-                  {kline_svg(frame)}
-                  {build_kline_table(frame)}
+                  {kline_svg(frame, chart_id)}
+                  <div class="kline-detail" id="detail-{chart_id}">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
                 </section>
                 """
             )
     return "\n".join(blocks)
 
 
-def build_kline_table(frame: pd.DataFrame) -> str:
-    rows = []
-    for _, row in frame.iterrows():
-        dt = pd.to_datetime(row["datetime"]).strftime("%Y-%m-%d %H:%M")
-        rows.append(
-            "<tr>"
-            + td(dt)
-            + td(f"{float(row['open']):.2f}")
-            + td(f"{float(row['high']):.2f}")
-            + td(f"{float(row['low']):.2f}")
-            + td(f"{float(row['close']):.2f}")
-            + td(int(row["volume"]))
-            + td(int(row["open_interest"]))
-            + "</tr>"
-        )
-    return table(["时间", "开盘", "高点", "低点", "收盘", "成交量", "持仓量"], rows)
-
-
-def kline_svg(frame: pd.DataFrame, width: int = 1100, height: int = 520) -> str:
+def kline_svg(frame: pd.DataFrame, chart_id: str, width: int = 1100, height: int = 520) -> str:
     data = frame.copy()
     if data.empty:
         return ""
@@ -132,10 +111,19 @@ def kline_svg(frame: pd.DataFrame, width: int = 1100, height: int = 520) -> str:
         vol_top = volume_y(volume)
         vol_h = sub_top + sub_h - vol_top
         oi_points.append(f"{x:.1f},{oi_y(open_interest):.1f}")
+        dt = pd.to_datetime(row["datetime"]).strftime("%Y-%m-%d %H:%M")
         elements.extend([
             f'<line x1="{x:.1f}" y1="{y(high):.1f}" x2="{x:.1f}" y2="{y(low):.1f}" class="{cls} wick"/>',
             f'<rect x="{x - candle_w / 2:.1f}" y="{body_y:.1f}" width="{candle_w:.1f}" height="{body_h:.1f}" class="{cls} body"/>',
             f'<rect x="{x - candle_w / 2:.1f}" y="{vol_top:.1f}" width="{candle_w:.1f}" height="{vol_h:.1f}" class="volume-bar"/>',
+            (
+                f'<rect x="{x - step / 2:.1f}" y="{top_pad}" width="{step:.1f}" height="{sub_top + sub_h - top_pad}" '
+                f'class="candle-hit" data-chart="{escape(chart_id)}" data-time="{escape(dt)}" '
+                f'data-open="{open_:.2f}" data-high="{high:.2f}" data-low="{low:.2f}" data-close="{close:.2f}" '
+                f'data-volume="{int(volume)}" data-open-interest="{int(open_interest)}">'
+                f'<title>{escape(dt)} 开 {open_:.2f} 高 {high:.2f} 低 {low:.2f} 收 {close:.2f} 量 {int(volume)} 持仓 {int(open_interest)}</title>'
+                f'</rect>'
+            ),
         ])
         label_step = max(1, len(data) // 8)
         if idx % label_step == 0 or idx == len(data) - 1:
@@ -153,12 +141,6 @@ def kline_svg(frame: pd.DataFrame, width: int = 1100, height: int = 520) -> str:
     elements.append(f'<polyline points="{" ".join(oi_points)}" fill="none" class="oi-line"/>')
     elements.append("</svg>")
     return "".join(elements)
-
-
-def table(headers: list[str], rows: list[str]) -> str:
-    head = "".join(f"<th>{header}</th>" for header in headers)
-    body = "".join(rows)
-    return f'<div class="table-wrap"><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>'
 
 
 def render_html(reports, data: dict[str, pd.DataFrame]) -> str:
@@ -207,17 +189,6 @@ def render_html(reports, data: dict[str, pd.DataFrame]) -> str:
       margin-bottom: 16px;
     }}
     .period-head p {{ margin: 0 0 14px; color: #c9d1d9; }}
-    .table-wrap {{ overflow-x: auto; }}
-    table {{ width: 100%; border-collapse: collapse; min-width: 760px; }}
-    th, td {{
-      border: 1px solid var(--line);
-      padding: 8px 10px;
-      text-align: center;
-      vertical-align: top;
-      font-size: 13px;
-    }}
-    th {{ background: var(--panel2); color: #c9d1d9; }}
-    small {{ color: var(--muted); }}
     .kline {{
       width: 100%;
       height: 520px;
@@ -238,6 +209,20 @@ def render_html(reports, data: dict[str, pd.DataFrame]) -> str:
     .price-marker {{ fill: #f2c94c; stroke: #0d1117; stroke-width: 2; }}
     .price-label, .max-volume-label {{ fill: #e6edf3; font-size: 12px; font-weight: 600; }}
     .max-volume-line {{ stroke: #f2c94c; stroke-width: 1.4; stroke-dasharray: 6 4; opacity: 0.88; }}
+    .kline line, .kline polyline, .kline text, .kline circle, .kline rect:not(.candle-hit) {{ pointer-events: none; }}
+    .candle-hit {{ fill: transparent; cursor: pointer; pointer-events: all; }}
+    .candle-hit:hover {{ fill: rgba(242, 201, 76, 0.08); }}
+    .kline-detail {{
+      min-height: 42px;
+      border: 1px solid var(--line);
+      background: #10141b;
+      border-radius: 6px;
+      padding: 10px 12px;
+      color: #c9d1d9;
+      font-size: 13px;
+    }}
+    .kline-detail b {{ color: #e6edf3; margin-right: 10px; }}
+    .kline-detail span {{ display: inline-block; margin-right: 14px; }}
     .steps li {{ margin: 6px 0; }}
   </style>
 </head>
@@ -255,12 +240,30 @@ def render_html(reports, data: dict[str, pd.DataFrame]) -> str:
         <li>价格用K线高点、低点、收盘位置描述波动规律。</li>
         <li>成交量柱和持仓量线放在同一个区域显示。</li>
         <li>K线图标出两个月高低点价格，并标出最大成交量K线的高低点。</li>
+        <li>点击任意K线显示该根K线的时间、开高低收、成交量、持仓量。</li>
         <li>K线颜色：红涨绿跌。</li>
       </ol>
     </section>
 
     {build_timeframe_sections(reports, data)}
   </main>
+  <script>
+    document.addEventListener("click", function (event) {{
+      const target = event.target.closest(".candle-hit");
+      if (!target) return;
+      const detail = document.getElementById("detail-" + target.dataset.chart);
+      if (!detail) return;
+      detail.innerHTML = [
+        "<b>" + target.dataset.time + "</b>",
+        "<span>开盘 " + target.dataset.open + "</span>",
+        "<span>高点 " + target.dataset.high + "</span>",
+        "<span>低点 " + target.dataset.low + "</span>",
+        "<span>收盘 " + target.dataset.close + "</span>",
+        "<span>成交量 " + Number(target.dataset.volume).toLocaleString("zh-CN") + "</span>",
+        "<span>持仓量 " + Number(target.dataset.openInterest).toLocaleString("zh-CN") + "</span>"
+      ].join("");
+    }});
+  </script>
 </body>
 </html>
 """
