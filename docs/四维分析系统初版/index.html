@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>四维分析系统初版</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090d12;
+      --panel: #111821;
+      --line: #2b3442;
+      --text: #e6edf3;
+      --muted: #9aa7b2;
+      --warn: #f2c94c;
+      --blue: #4cc9f0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+      line-height: 1.55;
+    }
+    header {
+      padding: 24px 28px 14px;
+      border-bottom: 1px solid var(--line);
+      background: #0e141c;
+    }
+    h1 { margin: 0 0 8px; font-size: 24px; }
+    .note { margin: 0; color: var(--muted); }
+    main {
+      padding: 18px 28px 44px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 14px;
+    }
+    .period-card {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .card-head h3 { margin: 0; font-size: 17px; }
+    .card-head span {
+      color: var(--warn);
+      border: 1px solid #4b3f18;
+      background: #17140a;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 10px 0 12px;
+    }
+    .tag {
+      border: 1px solid #314055;
+      background: #121d2a;
+      color: #d7dee8;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 12px;
+    }
+    .line-item {
+      border-top: 1px solid var(--line);
+      padding: 10px 0 0;
+      margin-top: 10px;
+    }
+    .line-item b { color: var(--blue); }
+    .line-item p { margin: 6px 0 0; color: #d7dee8; }
+    .level-0 { border-left: 4px solid #7b8491; }
+    .level-1 { border-left: 4px solid #4cc9f0; }
+    .level-2 { border-left: 4px solid #f2c94c; }
+    .level-3 { border-left: 4px solid #ff7b72; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>四维分析系统初版</h1>
+    <p class="note">减法版：每个品种、每个周期只输出当前状态、当前观察位、等待原因、准备等级、失效条件。</p>
+  </header>
+  <main>
+    
+      <article class="period-card level-2">
+        <div class="card-head">
+          <h3>螺纹钢(RB0) · 日线</h3>
+          <span>2级：反抽确认中</span>
+        </div>
+        <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">锚点区间拉锯</span><span class="tag">接近观察位</span></div>
+        
+      <section class="line-item">
+        <b>1. 当前状态</b>
+        <p>空方控制。锚点后收在低点下方占比 27.3%，收在高点上方占比 0.0%，收在区间内占比 72.7%。价格下移、持仓增加，空方主动参与增加。</p>
+      </section>
+    
+        
+      <section class="line-item">
+        <b>2. 当前观察位</b>
+        <p>压力 3138.00，距最新收盘 1.45%；支撑 3080.00，距最新收盘 0.42%。最大量K线 2026-05-26 00:00，区间 3138.00-3218.00。</p>
+      </section>
+    
+        
+      <section class="line-item">
+        <b>3. 等待原因</b>
+        <p>价格已接近观察位，但仍需等待该位置的收盘确认，以及成交量和持仓量是否支持。</p>
+      </section>
+    
+        
+      <section class="line-item">
+        <b>4. 准备等级</b>
+        <p>2级：反抽确认中</p>
+      </section>
+    
+        
+      <section class="line-item">
+        <b>5. 失效条件</b>
+        <p>若后续收盘重新站回压力位 3138.00 上方，并且成交量、持仓量支持上攻，空方观察失效，等待新锚点。</p>
+      </section>
+    
+      </article>
+    
+
+      <article class="period-card level-2">
+        <div class="card-head">
+          <h3>螺纹钢(RB0) · 周线</h3>
+          <span>2级：反抽确认中</span>
+        </div>
+        <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">锚点区间拉锯</span><span class="tag">接近观察位</span></div>
+        
+      <section class="line-item">
+        <b>1. 当前状态</b>
+        <p>空方控制。锚点后收在低点下方占比 50.0%，收在高点上方占比 0.0%，收在区间内占比 50.0%。价格下移、持仓增加，空方主动参与增加。</p>
+      </section>
+    
+        
+      <section class="line-item">
+        <b>2. 当前观察位</b>
+        <p>压力 3136.00，距最新收盘 1.39%；支撑 3080.00，距最新收盘 0.42%。最大量K线 2026-05-29 00:00，区间 3136.00-3238.00。</p>
+      </section>
+    
+        
+      <section class="line-item">
+        <b>3. 等待原因</b>
+        <p>价格已接近观察位，但仍需等待该位置的收盘确认，以及成交量和持仓量是否支持。</p>
+      </section>
+    
+        
+      <section class="line-item">
+        <b>4. 准备等级</b>
+        <p>2级：反抽确认中</p>
+      </section>
+    
+        
+      <section class="line-item">
+        <b>5. 失效条件</b>
+        <p>若后续收盘重新站回压力位 3136.00 上方，并且成交量、持仓量支持上攻，空方观察失效，等待新锚点。</p>
+      </section>
+    
+      </article>
+    
+
+      <article class="period-card level-2">
+        <div class="card-head">
+          <h3>螺纹钢(RB0) · 小时线</h3>
+          <span>2级：反抽确认中</span>
+        </div>
+        <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">接近观察位</span></div>
+        
+      <section class="line-item">
+        <b>1. 当前状态</b>
+        <p>空方控制。锚点后收在低点下方占比 90.5%，收在高点上方占比 0.0%，收在区间内占比 9.5%。价格下移、持仓增加，空方主动参与增加。</p>
+      </section>
+    
+        
+      <section class="line-item">
+        <b>2. 当前观察位</b>
+        <p>压力 3136.00，距最新收盘 1.59%；支撑 3080.00，距最新收盘 0.23%。最大量K线 2026-05-25 22:00，区间 3181.00-3217.00。</p>
+      </section>
+    
+        
+      <section class="line-item">
+        <b>3. 等待原因</b>
+        <p>价格已接近观察位，但仍需等待该位置的收盘确认，以及成交量和持仓量是否支持。</p>
+      </section>
+    
+        
+      <section class="line-item">
+        <b>4. 准备等级</b>
+        <p>2级：反抽确认中</p>
+      </section>
+    
+        
+      <section class="line-item">
+        <b>5. 失效条件</b>
+        <p>若后续收盘重新站回压力位 3136.00 上方，并且成交量、持仓量支持上攻，空方观察失效，等待新锚点。</p>
+      </section>
+    
+      </article>
+    
+      <article class="period-card level-0">
+        <div class="card-head">
+          <h3>PVC(V0) · 日线</h3>
+          <span>0级：等待</span>
+        </div>
+        <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">接近观察位</span></div>
+        
+      <section class="line-item">
+        <b>1. 当前状态</b>
+        <p>空方控制。锚点后收在低点下方占比 96.7%，收在高点上方占比 0.0%，收在区间内占比 3.3%。价格下移、持仓增加，空方主动参与增加。</p>
+      </section>
+    
+        
+      <section class="line-item">
+        <b>2. 当前观察位</b>
+        <p>压力 5006.00，距最新收盘 14.08%；支撑 4385.00，距最新收盘 0.07%。最大量K线 2026-05-14 00:00，区间 5054.00-5257.00。</p>
+      </section>
+    
+        
+      <section class="line-item">
+        <b>3. 等待原因</b>
+        <p>价格距离压力观察位 14.08%，位置偏远，等待反抽靠近压力位。</p>
+      </section>
+    
+        
+      <section class="line-item">
+        <b>4. 准备等级</b>
+        <p>0级：等待</p>
+      </section>
+    
+        
+      <section class="line-item">
+        <b>5. 失效条件</b>
+        <p>若后续收盘重新站回压力位 5006.00 上方，并且成交量、持仓量支持上攻，空方观察失效，等待新锚点。</p>
+      </section>
+    
+      </article>
+    
+
+      <article class="period-card level-0">
+        <div class="card-head">
+          <h3>PVC(V0) · 周线</h3>
+          <span>0级：等待</span>
+        </div>
+        <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">接近观察位</span></div>
+        
+      <section class="line-item">
+        <b>1. 当前状态</b>
+        <p>空方控制。锚点后收在低点下方占比 100.0%，收在高点上方占比 0.0%，收在区间内占比 0.0%。价格下移、持仓增加，空方主动参与增加。</p>
+      </section>
+    
+        
+      <section class="line-item">
+        <b>2. 当前观察位</b>
+        <p>压力 4826.00，距最新收盘 9.98%；支撑 4385.00，距最新收盘 0.07%。最大量K线 2026-05-15 00:00，区间 5024.00-5257.00。</p>
+      </section>
+    
+        
+      <section class="line-item">
+        <b>3. 等待原因</b>
+        <p>价格距离压力观察位 9.98%，位置偏远，等待反抽靠近压力位。</p>
+      </section>
+    
+        
+      <section class="line-item">
+        <b>4. 准备等级</b>
+        <p>0级：等待</p>
+      </section>
+    
+        
+      <section class="line-item">
+        <b>5. 失效条件</b>
+        <p>若后续收盘重新站回压力位 4826.00 上方，并且成交量、持仓量支持上攻，空方观察失效，等待新锚点。</p>
+      </section>
+    
+      </article>
+    
+
+      <article class="period-card level-0">
+        <div class="card-head">
+          <h3>PVC(V0) · 小时线</h3>
+          <span>0级：等待</span>
+        </div>
+        <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">接近观察位</span></div>
+        
+      <section class="line-item">
+        <b>1. 当前状态</b>
+        <p>空方控制。锚点后收在低点下方占比 100.0%，收在高点上方占比 0.0%，收在区间内占比 0.0%。价格下移、持仓增加，空方主动参与增加。</p>
+      </section>
+    
+        
+      <section class="line-item">
+        <b>2. 当前观察位</b>
+        <p>压力 5162.00，距最新收盘 17.80%；支撑 4370.00，距最新收盘 0.27%。最大量K线 2026-05-13 22:00，区间 5162.00-5256.00。</p>
+      </section>
+    
+        
+      <section class="line-item">
+        <b>3. 等待原因</b>
+        <p>价格距离压力观察位 17.80%，位置偏远，等待反抽靠近压力位。</p>
+      </section>
+    
+        
+      <section class="line-item">
+        <b>4. 准备等级</b>
+        <p>0级：等待</p>
+      </section>
+    
+        
+      <section class="line-item">
+        <b>5. 失效条件</b>
+        <p>若后续收盘重新站回压力位 5162.00 上方，并且成交量、持仓量支持上攻，空方观察失效，等待新锚点。</p>
+      </section>
+    
+      </article>
+    
+  </main>
+</body>
+</html>
