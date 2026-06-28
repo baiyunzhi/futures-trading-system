@@ -271,7 +271,10 @@ def build_max_volume_anchor_workflow(timeframe: str, frame: pd.DataFrame) -> lis
     latest_down_accept = first_row(after[(after["close"] < low)])
     false_up = first_row(after[(after["high"] > high) & (after["close"] <= high)])
     false_down = first_row(after[(after["low"] < low) & (after["close"] >= low)])
-    retest_pressure = first_row(after[(after["high"] >= low) & (after["close"] < low)])
+    after_down_break = after
+    if first_down_break is not None:
+        after_down_break = after[after["datetime"] > first_down_break["datetime"]]
+    retest_pressure = first_row(after_down_break[(after_down_break["high"] >= low) & (after_down_break["close"] < low)])
     retest_support = first_row(after[(after["low"] <= high) & (after["close"] > high)])
 
     inside_count = int(((after["close"] >= low) & (after["close"] <= high)).sum())
@@ -339,8 +342,105 @@ def build_max_volume_anchor_workflow(timeframe: str, frame: pd.DataFrame) -> lis
             f"说明 {high:.2f} 可能从压力转为支撑。"
         )
 
+    alerts.extend(build_dynamic_pressure_workflow(timeframe, after, low))
     alerts.extend(build_anchor_trade_plan(timeframe, max_volume_row, after, latest))
     return alerts
+
+
+def build_dynamic_pressure_workflow(timeframe: str, after: pd.DataFrame, anchor_low: float) -> list[str]:
+    if after.empty:
+        return []
+
+    below_anchor = after[after["close"] < anchor_low]
+    if below_anchor.empty:
+        return [
+            f"动态压力工作流：价格还没有收盘跌破最大量K线低点 {anchor_low:.2f}，系统暂不下移压力位。"
+        ]
+
+    first_accept = below_anchor.iloc[0]
+    before_next_break = after[after["datetime"] > first_accept["datetime"]]
+    if before_next_break.empty:
+        return [
+            f"动态压力工作流：{format_dt(first_accept['datetime'])} 收盘跌破 {anchor_low:.2f} 后，"
+            f"{anchor_low:.2f} 是当前第一压力位，等待反抽确认。"
+        ]
+
+    alerts = [
+        (
+            f"动态压力工作流：{format_dt(first_accept['datetime'])} 收盘跌破最大量K线低点 {anchor_low:.2f} 后，"
+            f"{anchor_low:.2f} 从支撑位变成第一压力位。"
+        )
+    ]
+
+    anchor_retest = first_row(
+        before_next_break[
+            (before_next_break["high"] >= anchor_low - 2)
+            & (before_next_break["close"] <= anchor_low + 2)
+        ]
+    )
+    if anchor_retest is not None:
+        volume_change = float(anchor_retest["volume"] - first_accept["volume"])
+        oi_change = float(anchor_retest["open_interest"] - first_accept["open_interest"])
+        body = abs(float(anchor_retest["close"]) - float(anchor_retest["open"]))
+        full_range = float(anchor_retest["high"] - anchor_retest["low"])
+        alerts.append(
+            f"反抽确认：{format_dt(anchor_retest['datetime'])} 反抽到 {anchor_low:.2f} 附近后停滞，"
+            f"成交量较跌破时变化 {volume_change:+.0f}，持仓量变化 {oi_change:+.0f}，"
+            f"K线实体 {body:.2f}、全长 {full_range:.2f}，说明反抽力度不足，第一压力位继续有效。"
+        )
+
+    phase_scope = before_next_break
+    if anchor_retest is not None:
+        phase_scope = before_next_break[before_next_break["datetime"] < anchor_retest["datetime"]]
+    if phase_scope.empty:
+        phase_scope = before_next_break
+    first_low_row = phase_scope.loc[phase_scope["low"].idxmin()]
+    phase_low = float(first_low_row["low"])
+    phase_low_time = first_low_row["datetime"]
+    after_phase_low = before_next_break[before_next_break["datetime"] > phase_low_time]
+    phase_break = first_row(after_phase_low[after_phase_low["close"] < phase_low])
+
+    alerts.append(
+        f"阶段低点识别：跌破 {anchor_low:.2f} 后，系统识别到阶段低点 {phase_low:.2f}，"
+        f"时间 {format_dt(phase_low_time)}。"
+    )
+
+    if phase_break is not None:
+        alerts.append(
+            f"压力位下移：{format_dt(phase_break['datetime'])} 收盘 {float(phase_break['close']):.2f} "
+            f"跌破阶段低点 {phase_low:.2f}，系统把 {phase_low:.2f} 升级为新的压力位。"
+        )
+    else:
+        alerts.append(
+            f"等待提示：阶段低点 {phase_low:.2f} 尚未被收盘跌破，系统不下移压力位，继续等待。"
+        )
+
+    if timeframe == "小时线":
+        alerts.extend(describe_latest_hourly_decline(after))
+    return alerts
+
+
+def describe_latest_hourly_decline(frame: pd.DataFrame, window: int = 20) -> list[str]:
+    if len(frame) < window * 2:
+        return []
+    recent = frame.tail(window)
+    previous = frame.iloc[-window * 2 : -window]
+    recent_close_change = float(recent.iloc[-1]["close"] - recent.iloc[0]["close"])
+    recent_oi_change = float(recent.iloc[-1]["open_interest"] - recent.iloc[0]["open_interest"])
+    recent_volume = float(recent["volume"].sum())
+    previous_volume = float(previous["volume"].sum())
+    volume_change_pct = (recent_volume - previous_volume) / previous_volume * 100 if previous_volume > 0 else 0.0
+    return [
+        (
+            f"最后下跌段量仓：最近 {window} 根小时K线价格从 {float(recent.iloc[0]['close']):.2f} "
+            f"到 {float(recent.iloc[-1]['close']):.2f}，变化 {recent_close_change:+.2f}；"
+            f"持仓量增加 {recent_oi_change:+.0f}，成交量合计较前 {window} 根变化 {volume_change_pct:+.1f}%。"
+        ),
+        (
+            "量仓含义：价格继续下移时持仓量明显放大，但成交量没有同步成倍放大，"
+            "说明空方参与仍在增加，行情不是单纯靠成交量爆发推动，而是持仓结构继续向下推进。"
+        ),
+    ]
 
 
 def build_anchor_trade_plan(
@@ -356,8 +456,8 @@ def build_anchor_trade_plan(
     max_after_high = float(after["high"].max()) if not after.empty else float(latest["high"])
 
     if latest_close < low:
-        entry = low
-        stop = round_up_to_ten(low) + 1.0
+        entry = current_pressure_level(after, low)
+        stop = round_up_to_ten(entry) + 1.0
         target = max_after_low
         risk = stop - entry
         reward = entry - target
@@ -365,13 +465,13 @@ def build_anchor_trade_plan(
         if reward <= 0 or ratio < 3:
             return [
                 (
-                    f"计划状态：价格已经离开最大量K线低点 {low:.2f} 下方，但从反抽压力 {entry:.2f} 到当前可见低点 {target:.2f} "
+                    f"计划状态：价格已经离开当前压力位 {entry:.2f} 下方，但从反抽压力 {entry:.2f} 到当前可见低点 {target:.2f} "
                     f"的空间不足以形成1:3，系统提示等待，不追空。"
                 )
             ]
         return [
             (
-                f"计划提示：若后续反抽 {low:.2f} 附近不能重新站回，按支撑转压力观察；"
+                f"计划提示：若后续反抽当前压力位 {entry:.2f} 附近不能重新站回，按支撑转压力观察；"
                 f"参考止损 {stop:.2f}，目标看后续低点 {target:.2f}，风险利润比约 1:{ratio:.2f}。"
             )
         ]
@@ -390,6 +490,32 @@ def build_anchor_trade_plan(
             "没有清晰支撑转压力或压力转支撑，系统提示等待。"
         )
     ]
+
+
+def current_pressure_level(after: pd.DataFrame, anchor_low: float) -> float:
+    below_anchor = after[after["close"] < anchor_low]
+    if below_anchor.empty:
+        return anchor_low
+    first_accept = below_anchor.iloc[0]
+    later = after[after["datetime"] > first_accept["datetime"]]
+    if later.empty:
+        return anchor_low
+    anchor_retest = first_row(
+        later[
+            (later["high"] >= anchor_low - 2)
+            & (later["close"] <= anchor_low + 2)
+        ]
+    )
+    phase_scope = later
+    if anchor_retest is not None:
+        phase_scope = later[later["datetime"] < anchor_retest["datetime"]]
+    if phase_scope.empty:
+        phase_scope = later
+    phase_low_row = phase_scope.loc[phase_scope["low"].idxmin()]
+    phase_low = float(phase_low_row["low"])
+    after_phase_low = later[later["datetime"] > phase_low_row["datetime"]]
+    phase_break = first_row(after_phase_low[after_phase_low["close"] < phase_low])
+    return phase_low if phase_break is not None else anchor_low
 
 
 def first_row(frame: pd.DataFrame) -> pd.Series | None:
