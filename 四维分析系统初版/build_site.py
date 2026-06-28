@@ -303,7 +303,7 @@ def period_card(
     tag_html = "".join(f'<span class="tag">{escape(tag)}</span>' for tag in tags)
     chart_id = f"{symbol}-{timeframe}"
     return f"""
-      <article class="period-card level-{readiness_level}">
+      <article class="period-card level-{readiness_level}" data-symbol="{escape(symbol)}" data-timeframe="{escape(timeframe)}">
         <div class="card-head">
           <h3>{escape(name)}({escape(symbol)}) · {escape(timeframe)}</h3>
           <span>{escape(readiness_text)}</span>
@@ -945,6 +945,43 @@ def build_selection_module(
     """
 
 
+def build_validation_module() -> str:
+    symbol_options = "".join(
+        f'<option value="{escape(symbol)}">{escape(meta["name"])}({escape(symbol)})</option>'
+        for symbol, meta in SYMBOLS.items()
+    )
+    timeframe_options = "".join(f'<option value="{escape(timeframe)}">{escape(timeframe)}</option>' for timeframe in TIMEFRAMES)
+    return f"""
+      <section class="validation-module">
+        <div class="validation-head">
+          <div>
+            <h2>每日验证日志</h2>
+            <p>每天记录系统当时怎么描述，后续行情如何验证，用来检查是否客观、是否提前、是否需要调整工作流。</p>
+          </div>
+          <button type="button" id="export-validation">导出日志</button>
+        </div>
+        <div class="validation-form">
+          <label>日期<input id="log-date" type="date"></label>
+          <label>品种<select id="log-symbol">{symbol_options}</select></label>
+          <label>周期<select id="log-timeframe">{timeframe_options}</select></label>
+          <label>后续结果
+            <select id="log-result">
+              <option value="待验证">待验证</option>
+              <option value="验证有效">验证有效</option>
+              <option value="提示偏早">提示偏早</option>
+              <option value="提示偏晚">提示偏晚</option>
+              <option value="判断失效">判断失效</option>
+            </select>
+          </label>
+          <label class="wide">系统当前提示<textarea id="log-snapshot" rows="3" readonly></textarea></label>
+          <label class="wide">人工复盘备注<textarea id="log-note" rows="3" placeholder="记录：系统说了什么，行情后来怎么走，哪里需要调整。"></textarea></label>
+          <button type="button" id="save-validation">保存验证记录</button>
+        </div>
+        <div class="validation-table" id="validation-list"></div>
+      </section>
+    """
+
+
 def timeframe_sections(
     frames_by_symbol: dict[str, dict[str, pd.DataFrame]],
     priorities: dict[str, dict[str, object]],
@@ -967,7 +1004,11 @@ def render() -> str:
     data = load_market_data(DATA_FILES)
     frames_by_symbol = build_frames_by_symbol(data)
     priorities = build_symbol_priorities(frames_by_symbol)
-    blocks = build_selection_module(priorities, frames_by_symbol) + timeframe_sections(frames_by_symbol, priorities)
+    blocks = (
+        build_selection_module(priorities, frames_by_symbol)
+        + build_validation_module()
+        + timeframe_sections(frames_by_symbol, priorities)
+    )
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -1093,6 +1134,98 @@ def render() -> str:
     }}
     .event-card p {{
       margin: 0;
+    }}
+    .validation-module {{
+      grid-column: 1 / -1;
+      border: 1px solid var(--line);
+      background: #0e141c;
+      border-radius: 8px;
+      padding: 14px 16px;
+    }}
+    .validation-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: start;
+      margin-bottom: 12px;
+    }}
+    .validation-head h2 {{
+      margin: 0 0 5px;
+      font-size: 18px;
+    }}
+    .validation-head p {{
+      margin: 0;
+      color: #d7dee8;
+      font-size: 13px;
+    }}
+    .validation-form {{
+      display: grid;
+      grid-template-columns: 150px 170px 150px 150px minmax(280px, 1fr);
+      gap: 10px;
+      align-items: end;
+    }}
+    .validation-form label {{
+      display: grid;
+      gap: 5px;
+      color: #9aa7b2;
+      font-size: 12px;
+    }}
+    .validation-form .wide {{
+      grid-column: span 2;
+    }}
+    input, select, textarea {{
+      width: 100%;
+      border: 1px solid #314055;
+      background: #0b1118;
+      color: #e6edf3;
+      border-radius: 6px;
+      padding: 8px 9px;
+      font: inherit;
+      font-size: 13px;
+    }}
+    textarea {{
+      resize: vertical;
+      min-height: 72px;
+    }}
+    button {{
+      border: 1px solid #25516d;
+      background: #102536;
+      color: #e6edf3;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }}
+    button:hover {{
+      border-color: #4cc9f0;
+      color: #ffffff;
+    }}
+    .validation-table {{
+      margin-top: 12px;
+      display: grid;
+      gap: 8px;
+    }}
+    .validation-row {{
+      display: grid;
+      grid-template-columns: 110px 140px 100px 100px minmax(0, 1fr);
+      gap: 10px;
+      border: 1px solid #314055;
+      background: #111821;
+      border-radius: 6px;
+      padding: 9px 10px;
+      color: #d7dee8;
+      font-size: 12px;
+    }}
+    .validation-row b {{
+      color: var(--blue);
+    }}
+    .validation-empty {{
+      border: 1px dashed #314055;
+      border-radius: 6px;
+      padding: 10px;
+      color: #9aa7b2;
+      font-size: 13px;
     }}
     .period-card {{
       border: 1px solid var(--line);
@@ -1222,6 +1355,15 @@ def render() -> str:
         grid-template-columns: 1fr;
         display: grid;
       }}
+      .validation-head,
+      .validation-form,
+      .validation-row {{
+        grid-template-columns: 1fr;
+        display: grid;
+      }}
+      .validation-form .wide {{
+        grid-column: auto;
+      }}
       .workflow-steps {{
         grid-template-columns: repeat(2, max-content);
       }}
@@ -1270,6 +1412,97 @@ def render() -> str:
         "<span>成交量 " + Number(target.dataset.volume).toLocaleString("zh-CN") + "</span>",
         "<span>持仓量 " + Number(target.dataset.openInterest).toLocaleString("zh-CN") + "</span>"
       ].join("");
+    }});
+
+    const validationKey = "four_dimension_validation_logs_v1";
+    const dateInput = document.getElementById("log-date");
+    const symbolInput = document.getElementById("log-symbol");
+    const timeframeInput = document.getElementById("log-timeframe");
+    const resultInput = document.getElementById("log-result");
+    const snapshotInput = document.getElementById("log-snapshot");
+    const noteInput = document.getElementById("log-note");
+    const listNode = document.getElementById("validation-list");
+
+    function loadLogs() {{
+      try {{
+        return JSON.parse(localStorage.getItem(validationKey) || "[]");
+      }} catch (error) {{
+        return [];
+      }}
+    }}
+
+    function saveLogs(logs) {{
+      localStorage.setItem(validationKey, JSON.stringify(logs));
+    }}
+
+    function currentSnapshot() {{
+      const card = document.querySelector('.period-card[data-symbol="' + symbolInput.value + '"][data-timeframe="' + timeframeInput.value + '"]');
+      if (!card) return "";
+      const title = card.querySelector("h3")?.textContent || "";
+      const lines = Array.from(card.querySelectorAll(".line-item")).map(function (item) {{
+        const label = item.querySelector("b")?.textContent || "";
+        const body = item.querySelector("p")?.textContent || "";
+        return label + "：" + body;
+      }});
+      return [title].concat(lines).join("\\n");
+    }}
+
+    function refreshSnapshot() {{
+      if (!snapshotInput) return;
+      snapshotInput.value = currentSnapshot();
+    }}
+
+    function renderLogs() {{
+      if (!listNode) return;
+      const logs = loadLogs().slice().reverse();
+      if (!logs.length) {{
+        listNode.innerHTML = '<div class="validation-empty">暂无验证记录。每天收盘后保存一条，用后续行情检验系统描述。</div>';
+        return;
+      }}
+      listNode.innerHTML = logs.map(function (log) {{
+        return [
+          '<article class="validation-row">',
+          '<b>' + log.date + '</b>',
+          '<span>' + log.symbol + '</span>',
+          '<span>' + log.timeframe + '</span>',
+          '<span>' + log.result + '</span>',
+          '<span>' + log.note + '</span>',
+          '</article>'
+        ].join("");
+      }}).join("");
+    }}
+
+    if (dateInput) {{
+      dateInput.valueAsDate = new Date();
+      symbolInput.addEventListener("change", refreshSnapshot);
+      timeframeInput.addEventListener("change", refreshSnapshot);
+      refreshSnapshot();
+      renderLogs();
+    }}
+
+    document.getElementById("save-validation")?.addEventListener("click", function () {{
+      const logs = loadLogs();
+      logs.push({{
+        date: dateInput.value,
+        symbol: symbolInput.options[symbolInput.selectedIndex].text,
+        timeframe: timeframeInput.value,
+        result: resultInput.value,
+        snapshot: snapshotInput.value,
+        note: noteInput.value.trim() || "未填写备注",
+        savedAt: new Date().toISOString()
+      }});
+      saveLogs(logs);
+      noteInput.value = "";
+      renderLogs();
+    }});
+
+    document.getElementById("export-validation")?.addEventListener("click", function () {{
+      const blob = new Blob([JSON.stringify(loadLogs(), null, 2)], {{ type: "application/json" }});
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "four-dimension-validation-logs.json";
+      link.click();
+      URL.revokeObjectURL(link.href);
     }});
   </script>
 </body>
