@@ -101,14 +101,20 @@ def period_card(symbol: str, name: str, timeframe: str, frame: pd.DataFrame) -> 
           <h3>{escape(name)}({escape(symbol)}) · {escape(timeframe)}</h3>
           <span>{escape(readiness_text)}</span>
         </div>
-        <div class="tag-row">{tag_html}</div>
-        {line_item("1. 当前状态", status)}
-        {line_item("2. 当前观察位", observe)}
-        {line_item("3. 等待原因", wait_reason)}
-        {line_item("4. 准备等级", readiness_text)}
-        {line_item("5. 失效条件", invalidation)}
-        {kline_svg(data, chart_id)}
-        <div class="kline-detail" id="detail-{escape(chart_id)}">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
+        <div class="period-layout">
+          <div class="chart-pane">
+            {kline_svg(data, chart_id)}
+            <div class="kline-detail" id="detail-{escape(chart_id)}">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
+          </div>
+          <aside class="info-pane">
+            <div class="tag-row">{tag_html}</div>
+            {line_item("1. 当前状态", status)}
+            {line_item("2. 当前观察位", observe)}
+            {line_item("3. 等待原因", wait_reason)}
+            {line_item("4. 准备等级", readiness_text)}
+            {line_item("5. 失效条件", invalidation)}
+          </aside>
+        </div>
       </article>
     """
 
@@ -170,15 +176,15 @@ def line_item(title: str, body: str) -> str:
     """
 
 
-def kline_svg(frame: pd.DataFrame, chart_id: str, width: int = 920, height: int = 420) -> str:
+def kline_svg(frame: pd.DataFrame, chart_id: str, width: int = 1200, height: int = 560) -> str:
     data = frame.sort_values("datetime").reset_index(drop=True)
     if data.empty:
         return ""
-    top_pad = 20
-    price_h = 210
-    sub_top = 270
-    sub_h = 90
-    bottom_pad = 32
+    top_pad = 24
+    price_h = 300
+    sub_top = 390
+    sub_h = 110
+    bottom_pad = 34
     left_pad = 54
     right_pad = 16
     plot_w = width - left_pad - right_pad
@@ -326,7 +332,7 @@ def render() -> str:
     main {{
       padding: 18px 28px 44px;
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      grid-template-columns: repeat(2, minmax(680px, 1fr));
       gap: 14px;
     }}
     .period-card {{
@@ -334,6 +340,7 @@ def render() -> str:
       background: var(--panel);
       border-radius: 8px;
       padding: 16px;
+      min-width: 0;
     }}
     .card-head {{
       display: flex;
@@ -366,17 +373,30 @@ def render() -> str:
       padding: 2px 8px;
       font-size: 12px;
     }}
+    .period-layout {{
+      display: grid;
+      grid-template-columns: minmax(0, 3fr) minmax(230px, 1fr);
+      gap: 14px;
+      align-items: start;
+    }}
+    .chart-pane,
+    .info-pane {{
+      min-width: 0;
+    }}
+    .info-pane {{
+      border-left: 1px solid var(--line);
+      padding-left: 14px;
+    }}
     .line-item {{
       border-top: 1px solid var(--line);
-      padding: 10px 0 0;
-      margin-top: 10px;
+      padding: 8px 0 0;
+      margin-top: 8px;
     }}
     .line-item b {{ color: var(--blue); }}
-    .line-item p {{ margin: 6px 0 0; color: #d7dee8; }}
+    .line-item p {{ margin: 5px 0 0; color: #d7dee8; font-size: 13px; }}
     .kline {{
       width: 100%;
-      height: 420px;
-      margin-top: 14px;
+      height: 560px;
       background: #0b1118;
       border: 1px solid var(--line);
       border-radius: 6px;
@@ -412,6 +432,28 @@ def render() -> str:
     .level-1 {{ border-left: 4px solid #4cc9f0; }}
     .level-2 {{ border-left: 4px solid #f2c94c; }}
     .level-3 {{ border-left: 4px solid #ff7b72; }}
+    @media (max-width: 1480px) {{
+      main {{
+        grid-template-columns: 1fr;
+      }}
+    }}
+    @media (max-width: 900px) {{
+      main {{
+        padding: 14px;
+      }}
+      .period-layout {{
+        grid-template-columns: 1fr;
+      }}
+      .info-pane {{
+        border-left: 0;
+        border-top: 1px solid var(--line);
+        padding-left: 0;
+        padding-top: 12px;
+      }}
+      .kline {{
+        height: 440px;
+      }}
+    }}
   </style>
 </head>
 <body>
