@@ -18,6 +18,7 @@ class TimeframeView:
     timeframe: str
     summary: str
     observations: list[str]
+    workflow_alerts: list[str]
     high: float
     low: float
     close: float
@@ -88,10 +89,12 @@ def combine_view(timeframe: str, frame: pd.DataFrame) -> TimeframeView:
     latest = frame.iloc[-1]
     summary = build_objective_summary(timeframe, frame)
     observations = build_observation_points(timeframe, frame)
+    workflow_alerts = build_workflow_alerts(timeframe, frame)
     return TimeframeView(
         timeframe=timeframe,
         summary=summary,
         observations=observations,
+        workflow_alerts=workflow_alerts,
         high=round(float(latest["high"]), 2),
         low=round(float(latest["low"]), 2),
         close=round(float(latest["close"]), 2),
@@ -287,6 +290,100 @@ def get_row_by_date(frame: pd.DataFrame, date_text: str) -> pd.Series | None:
     if matched.empty:
         return None
     return matched.iloc[0]
+
+
+def build_workflow_alerts(timeframe: str, frame: pd.DataFrame) -> list[str]:
+    if timeframe != "日线":
+        return []
+    return build_daily_pressure_workflow(frame)
+
+
+def build_daily_pressure_workflow(frame: pd.DataFrame) -> list[str]:
+    day_0601 = get_row_by_date(frame, "2026-06-01")
+    day_0610 = get_row_by_date(frame, "2026-06-10")
+    max_volume_row = frame.loc[frame["volume"].idxmax()]
+    if day_0601 is None or day_0610 is None:
+        return ["日线自动提示：缺少6月1日或6月10日日线数据，压力带工作流暂不触发。"]
+
+    pressure = float(day_0601["high"])
+    failed_break_high = float(day_0610["high"])
+    failed_break_close = float(day_0610["close"])
+    pressure_band_high = 3200.0
+    stop_price = pressure_band_high + 1.0
+    target = float(max_volume_row["low"])
+    risk = stop_price - pressure
+    reward = pressure - target
+    ratio = reward / risk if risk > 0 else 0.0
+    latest = frame.iloc[-1]
+    latest_close = float(latest["close"])
+    latest_high = float(latest["high"])
+    latest_low = float(latest["low"])
+    volume_change = float(day_0610["volume"] - day_0601["volume"])
+    oi_change = float(day_0610["open_interest"] - day_0601["open_interest"])
+
+    alerts = [
+        (
+            f"自动识别压力带：6月1日高点 {pressure:.2f}，6月10日盘中高点 {failed_break_high:.2f}，"
+            f"6月10日收盘 {failed_break_close:.2f} 回到压力内，系统将 {pressure:.2f}-{pressure_band_high:.2f} 标记为日线轻仓试空观察带。"
+        )
+    ]
+
+    if failed_break_high > pressure and failed_break_close <= pressure:
+        alerts.append("触发条件1：盘中过6月1日高点但收盘未站住，压力测试失败成立。")
+    else:
+        alerts.append("未触发条件1：没有形成盘中过前高、收盘回到压力内的失败突破。")
+
+    if ratio >= 3:
+        alerts.append(
+            f"触发条件2：按试空价 {pressure:.2f}、止损 {stop_price:.2f}、目标 {target:.2f} 计算，"
+            f"风险利润比 1:{ratio:.2f}，达到1:3要求。"
+        )
+    else:
+        alerts.append(
+            f"未触发条件2：按试空价 {pressure:.2f}、止损 {stop_price:.2f}、目标 {target:.2f} 计算，"
+            f"风险利润比 1:{ratio:.2f}，未达到1:3要求。"
+        )
+
+    if volume_change > 0 and oi_change <= 0:
+        alerts.append(
+            f"触发条件3：6月10日较6月1日成交量增加 {volume_change:+.0f}，持仓量变化 {oi_change:+.0f}，"
+            "表现为放量但没有增仓上攻，强势上攻证据不足。"
+        )
+    elif volume_change > 0 and oi_change > 0:
+        alerts.append(
+            f"观察条件3：6月10日较6月1日成交量增加 {volume_change:+.0f}，持仓量增加 {oi_change:+.0f}，"
+            "若后续价格站上3200，则不做空。"
+        )
+    else:
+        alerts.append(
+            f"观察条件3：6月10日较6月1日成交量变化 {volume_change:+.0f}，持仓量变化 {oi_change:+.0f}，"
+            "量仓没有显示强势上攻。"
+        )
+
+    if latest_close > pressure_band_high:
+        alerts.append(
+            f"当前状态：最新收盘 {latest_close:.2f} 已在3200上方，日线轻仓试空提示失效，等待重新回到压力带内再评估。"
+        )
+    elif latest_high >= pressure and latest_low <= pressure_band_high:
+        alerts.append(
+            f"当前状态：最新K线波动区间 {latest_low:.2f}-{latest_high:.2f} 触及观察带，盘中需要检查15分钟/小时K线是否站稳3200。"
+        )
+    elif latest_close < target:
+        alerts.append(
+            f"当前状态：最新收盘 {latest_close:.2f} 已低于目标 {target:.2f}，这笔日线压力带计划不再追空，等待新的压力区。"
+        )
+    else:
+        alerts.append(
+            f"当前状态：最新收盘 {latest_close:.2f} 未在 {pressure:.2f}-{pressure_band_high:.2f} 观察带内，系统保持等待反抽提示。"
+        )
+
+    alerts.append(
+        "盘中触发提示：价格进入3189-3200后，若不能连续2根15分钟K线收在3200上方，且不能1根小时K线收在3200上方，提示“压力带仍有效”。"
+    )
+    alerts.append(
+        "盘中失效提示：价格放量增仓并站上3200，提示“不做空，压力带被市场接受”。"
+    )
+    return alerts
 
 
 def describe_participant_attitude(close_change: float, oi_change: float) -> str:

@@ -35,6 +35,7 @@ def build_timeframe_sections(reports, data: dict[str, pd.DataFrame]) -> str:
                     <h2>{meta["name"]}({symbol}) · {timeframe}</h2>
                     <p>{view.summary}</p>
                     {observation_list(view.observations)}
+                    {workflow_alerts(view.workflow_alerts)}
                   </div>
                   {kline_svg(frame, chart_id)}
                   <div class="kline-detail" id="detail-{chart_id}">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
@@ -47,6 +48,13 @@ def build_timeframe_sections(reports, data: dict[str, pd.DataFrame]) -> str:
 def observation_list(items: list[str]) -> str:
     rows = "".join(f"<li>{escape(item)}</li>" for item in items)
     return f'<ul class="observations">{rows}</ul>'
+
+
+def workflow_alerts(items: list[str]) -> str:
+    if not items:
+        return ""
+    rows = "".join(f"<li>{escape(item)}</li>" for item in items)
+    return f'<div class="workflow"><h3>系统自动提示</h3><ul>{rows}</ul></div>'
 
 
 def kline_svg(frame: pd.DataFrame, chart_id: str, width: int = 1100, height: int = 520) -> str:
@@ -211,6 +219,28 @@ def render_html(reports, data: dict[str, pd.DataFrame]) -> str:
       color: #d7dee8;
       font-size: 13px;
       line-height: 1.65;
+    }}
+    .workflow {{
+      border: 1px solid #4b3f18;
+      background: #17140a;
+      border-radius: 6px;
+      padding: 12px 14px;
+      margin: 14px 0 0;
+    }}
+    .workflow h3 {{
+      margin: 0 0 8px;
+      color: var(--warn);
+      font-size: 15px;
+    }}
+    .workflow ul {{
+      padding-left: 18px;
+      margin: 0;
+    }}
+    .workflow li {{
+      margin: 6px 0;
+      color: #eadfbd;
+      font-size: 13px;
+      line-height: 1.7;
     }}
     .kline {{
       width: 100%;
