@@ -10,6 +10,7 @@ TIMEFRAMES = ("日线", "周线", "小时线")
 
 SYMBOLS = {
     "RB0": {"name": "螺纹钢", "multiplier": 10},
+    "V0": {"name": "PVC", "multiplier": 5},
 }
 
 
@@ -34,18 +35,25 @@ class MarketReport:
 
 def load_or_create_data(path: Path) -> pd.DataFrame:
     if not path.exists():
-        raise FileNotFoundError(f"缺少螺纹钢最近两个月数据文件: {path}")
+        raise FileNotFoundError(f"缺少最近两个月数据文件: {path}")
     return _normalize_data(pd.read_csv(path))
 
 
-def load_market_data(daily_path: Path, hourly_path: Path) -> dict[str, pd.DataFrame]:
-    if not daily_path.exists():
-        raise FileNotFoundError(f"缺少螺纹钢最近两个月日线数据文件: {daily_path}")
-    if not hourly_path.exists():
-        raise FileNotFoundError(f"缺少螺纹钢最近两个月小时线数据文件: {hourly_path}")
+def load_market_data(data_files: dict[str, dict[str, Path]]) -> dict[str, pd.DataFrame]:
+    daily_frames: list[pd.DataFrame] = []
+    hourly_frames: list[pd.DataFrame] = []
+    for symbol, paths in data_files.items():
+        daily_path = paths["daily"]
+        hourly_path = paths["hourly"]
+        if not daily_path.exists():
+            raise FileNotFoundError(f"缺少 {symbol} 最近两个月日线数据文件: {daily_path}")
+        if not hourly_path.exists():
+            raise FileNotFoundError(f"缺少 {symbol} 最近两个月小时线数据文件: {hourly_path}")
+        daily_frames.append(_normalize_data(pd.read_csv(daily_path)))
+        hourly_frames.append(_normalize_data(pd.read_csv(hourly_path)))
     return {
-        "daily": _normalize_data(pd.read_csv(daily_path)),
-        "hourly": _normalize_data(pd.read_csv(hourly_path)),
+        "daily": pd.concat(daily_frames, ignore_index=True).sort_values(["symbol", "datetime"]).reset_index(drop=True),
+        "hourly": pd.concat(hourly_frames, ignore_index=True).sort_values(["symbol", "datetime"]).reset_index(drop=True),
     }
 
 

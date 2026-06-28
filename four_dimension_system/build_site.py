@@ -9,8 +9,16 @@ from market_system import SYMBOLS, TIMEFRAMES, analyze_market, build_timeframes,
 
 
 ROOT = Path(__file__).resolve().parent
-DAILY_DATA_PATH = ROOT / "rb_recent_daily.csv"
-HOURLY_DATA_PATH = ROOT / "rb_recent_hourly.csv"
+DATA_FILES = {
+    "RB0": {
+        "daily": ROOT / "rb_recent_daily.csv",
+        "hourly": ROOT / "rb_recent_hourly.csv",
+    },
+    "V0": {
+        "daily": ROOT / "v_recent_daily.csv",
+        "hourly": ROOT / "v_recent_hourly.csv",
+    },
+}
 WEB_PATH = ROOT / "web" / "index.html"
 
 
@@ -163,7 +171,7 @@ def render_html(reports, data: dict[str, pd.DataFrame]) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>螺纹钢最近两个月四维行情描述</title>
+  <title>螺纹钢与PVC最近两个月四维行情描述</title>
   <style>
     :root {{
       color-scheme: dark;
@@ -281,20 +289,21 @@ def render_html(reports, data: dict[str, pd.DataFrame]) -> str:
 </head>
 <body>
   <header>
-    <h1>螺纹钢最近两个月四维行情描述</h1>
-    <p class="note">螺纹钢最近两个月真实数据。日线、周线、小时线分别独立描述，只落地K线、成交量、持仓量、时间周期四个维度。</p>
+    <h1>螺纹钢与PVC最近两个月四维行情描述</h1>
+    <p class="note">螺纹钢和PVC最近两个月真实数据。日线、周线、小时线分别独立描述，只落地K线、成交量、持仓量、时间周期四个维度。</p>
   </header>
   <main>
     <section class="card">
       <h2>一步一步的流程</h2>
       <ol class="steps">
-        <li>数据窗口：螺纹钢最近两个月真实日线和小时线数据。</li>
+        <li>数据窗口：螺纹钢和PVC最近两个月真实日线和小时线数据。</li>
         <li>日线、周线、小时线分别独立描述，周线由日线聚合。</li>
         <li>价格用K线高点、低点、收盘位置描述波动规律。</li>
         <li>成交量柱和持仓量线放在同一个区域显示。</li>
         <li>K线图标出两个月高低点价格，并标出最大成交量K线的高低点。</li>
         <li>点击任意K线显示该根K线的时间、开高低收、成交量、持仓量。</li>
         <li>K线颜色：红涨绿跌。</li>
+        <li>每个品种、每个周期独立执行同一套支撑压力演变工作流：最大成交量K线作为观察锚点，后续突破、跌破、假突破、回抽失败、支撑转压力或压力转支撑都自动写入行情表述。</li>
       </ol>
     </section>
 
@@ -323,7 +332,7 @@ def render_html(reports, data: dict[str, pd.DataFrame]) -> str:
 
 
 def main() -> None:
-    data = load_market_data(DAILY_DATA_PATH, HOURLY_DATA_PATH)
+    data = load_market_data(DATA_FILES)
     reports = analyze_market(data)
     WEB_PATH.parent.mkdir(parents=True, exist_ok=True)
     WEB_PATH.write_text(render_html(reports, data), encoding="utf-8")
