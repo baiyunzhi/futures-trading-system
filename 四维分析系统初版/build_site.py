@@ -89,11 +89,25 @@ def period_card(symbol: str, name: str, timeframe: str, frame: pd.DataFrame) -> 
         pressure_distance=pressure_distance,
         support_distance=support_distance,
     )
+    tags = normalize_distance_tags(tags, observation_chain, pressure_distance, support_distance)
+    tags.extend(chain_tags(observation_chain))
     tags.append(anchor_state["state"])
-    readiness_level, readiness_text = readiness_from_tags(tags, pressure_distance, support_distance)
-    wait_reason = waiting_reason_from_state(tags, pressure_distance, support_distance, readiness_level)
+    readiness_level, readiness_text = readiness_from_current_observation(tags, pressure_distance, support_distance)
+    wait_reason = waiting_reason_from_current_observation(tags, pressure_distance, support_distance, readiness_level)
     wait_reason = combine_wait_reason(wait_reason, anchor_state)
-    status = build_status(tags, close_change, oi_change, below_ratio, above_ratio, inside_ratio)
+    status = build_status(
+        tags,
+        close_change,
+        oi_change,
+        below_ratio,
+        above_ratio,
+        inside_ratio,
+        pressure,
+        support,
+        pressure_distance,
+        support_distance,
+        observation_chain,
+    )
     observe = (
         f"压力 {pressure:.2f}，距最新收盘 {pressure_distance:.2f}%；"
         f"支撑 {support:.2f}，距最新收盘 {support_distance:.2f}%。"
@@ -135,8 +149,15 @@ def build_status(
     below_ratio: float,
     above_ratio: float,
     inside_ratio: float,
+    pressure: float,
+    support: float,
+    pressure_distance: float,
+    support_distance: float,
+    observation_chain: dict[str, object],
 ) -> str:
-    if "支撑转压力" in tags:
+    if "动态观察位下移" in tags:
+        control = f"空方控制，观察位已下移到 {pressure:.2f}"
+    elif "支撑转压力" in tags:
         control = "空方控制"
     elif "压力转支撑" in tags:
         control = "多方控制"
@@ -155,8 +176,81 @@ def build_status(
     return (
         f"{control}。锚点后收在低点下方占比 {below_ratio * 100:.1f}%，"
         f"收在高点上方占比 {above_ratio * 100:.1f}%，"
-        f"收在区间内占比 {inside_ratio * 100:.1f}%。{attitude}"
+        f"收在区间内占比 {inside_ratio * 100:.1f}%。"
+        f"当前压力距离 {pressure_distance:.2f}%，当前支撑距离 {support_distance:.2f}%。{attitude}"
     )
+
+
+def chain_tags(observation_chain: dict[str, object]) -> list[str]:
+    if observation_chain["current_pressure"] is None:
+        return []
+    levels = observation_chain.get("levels", [])
+    if len(levels) >= 2:
+        return ["动态观察位下移"]
+    return ["支撑转压力"]
+
+
+def normalize_distance_tags(
+    tags: list[str],
+    observation_chain: dict[str, object],
+    pressure_distance: float,
+    support_distance: float,
+) -> list[str]:
+    out = [tag for tag in tags if tag not in ("接近观察位", "远离观察位")]
+    if observation_chain["current_pressure"] is not None or "支撑转压力" in out:
+        out.append("接近当前压力位" if pressure_distance <= 2.5 else "远离当前压力位")
+    elif "压力转支撑" in out:
+        out.append("接近当前支撑位" if support_distance <= 2.5 else "远离当前支撑位")
+    elif min(pressure_distance, support_distance) <= 2:
+        out.append("接近观察位")
+    else:
+        out.append("远离观察位")
+    return out
+
+
+def readiness_from_current_observation(
+    tags: list[str],
+    pressure_distance: float,
+    support_distance: float,
+) -> tuple[int, str]:
+    if "动态观察位下移" in tags or "支撑转压力" in tags:
+        if pressure_distance <= 1:
+            return 3, "3级：位置明确，可制定计划"
+        if pressure_distance <= 2.5:
+            return 2, "2级：反抽确认中"
+        if pressure_distance <= 5:
+            return 1, "1级：接近观察位"
+        return 0, "0级：等待"
+    if "压力转支撑" in tags:
+        if support_distance <= 1:
+            return 3, "3级：位置明确，可制定计划"
+        if support_distance <= 2.5:
+            return 2, "2级：回踩确认中"
+        if support_distance <= 5:
+            return 1, "1级：接近观察位"
+        return 0, "0级：等待"
+    return readiness_from_tags(tags, pressure_distance, support_distance)
+
+
+def waiting_reason_from_current_observation(
+    tags: list[str],
+    pressure_distance: float,
+    support_distance: float,
+    readiness_level: int,
+) -> str:
+    if "动态观察位下移" in tags or "支撑转压力" in tags:
+        if readiness_level == 0:
+            return f"当前价格距离最近压力观察位 {pressure_distance:.2f}%，不适合追空，等待反抽靠近当前压力位。"
+        if readiness_level in (1, 2):
+            return "价格已接近当前压力观察位，等待收盘不能重新站回，同时观察成交量和持仓量是否不支持上攻。"
+        return "当前压力观察位已经明确，下一步只等待具体触发条件，不提前追价。"
+    if "压力转支撑" in tags:
+        if readiness_level == 0:
+            return f"当前价格距离最近支撑观察位 {support_distance:.2f}%，不适合追多，等待回踩靠近当前支撑位。"
+        if readiness_level in (1, 2):
+            return "价格已接近当前支撑观察位，等待收盘不能跌回，同时观察成交量和持仓量是否支持。"
+        return "当前支撑观察位已经明确，下一步只等待具体触发条件。"
+    return waiting_reason_from_state(tags, pressure_distance, support_distance, readiness_level)
 
 
 def build_observation_chain(data: pd.DataFrame, anchor: pd.Series) -> dict[str, object]:
@@ -311,6 +405,11 @@ def build_invalidation(
     anchor_low: float,
     anchor_state: dict[str, object],
 ) -> str:
+    if "动态观察位下移" in tags or "支撑转压力" in tags:
+        return (
+            f"若后续收盘重新站回当前压力观察位 {pressure:.2f} 上方，"
+            "并且成交量、持仓量支持上攻，则当前压力位失效；系统回看上一层压力或等待新锚点。"
+        )
     if anchor_state["state"] == "候选新锚点":
         candidate = anchor_state["candidate"]
         return (
