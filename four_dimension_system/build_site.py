@@ -34,6 +34,7 @@ def build_timeframe_sections(reports, data: dict[str, pd.DataFrame]) -> str:
                   <div class="period-head">
                     <h2>{meta["name"]}({symbol}) · {timeframe}</h2>
                     <p>{view.summary}</p>
+                    {observation_list(view.observations)}
                   </div>
                   {kline_svg(frame, chart_id)}
                   <div class="kline-detail" id="detail-{chart_id}">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
@@ -41,6 +42,11 @@ def build_timeframe_sections(reports, data: dict[str, pd.DataFrame]) -> str:
                 """
             )
     return "\n".join(blocks)
+
+
+def observation_list(items: list[str]) -> str:
+    rows = "".join(f"<li>{escape(item)}</li>" for item in items)
+    return f'<ul class="observations">{rows}</ul>'
 
 
 def kline_svg(frame: pd.DataFrame, chart_id: str, width: int = 1100, height: int = 520) -> str:
@@ -189,6 +195,23 @@ def render_html(reports, data: dict[str, pd.DataFrame]) -> str:
       margin-bottom: 16px;
     }}
     .period-head p {{ margin: 0 0 14px; color: #c9d1d9; }}
+    .observations {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 8px;
+      padding: 0;
+      margin: 14px 0 0;
+      list-style: none;
+    }}
+    .observations li {{
+      border: 1px solid var(--line);
+      background: #10141b;
+      border-radius: 6px;
+      padding: 10px 12px;
+      color: #d7dee8;
+      font-size: 13px;
+      line-height: 1.65;
+    }}
     .kline {{
       width: 100%;
       height: 520px;

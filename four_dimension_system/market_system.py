@@ -17,6 +17,7 @@ SYMBOLS = {
 class TimeframeView:
     timeframe: str
     summary: str
+    observations: list[str]
     high: float
     low: float
     close: float
@@ -86,9 +87,11 @@ def build_timeframes(symbol_daily_df: pd.DataFrame, symbol_hourly_df: pd.DataFra
 def combine_view(timeframe: str, frame: pd.DataFrame) -> TimeframeView:
     latest = frame.iloc[-1]
     summary = build_objective_summary(timeframe, frame)
+    observations = build_observation_points(timeframe, frame)
     return TimeframeView(
         timeframe=timeframe,
         summary=summary,
+        observations=observations,
         high=round(float(latest["high"]), 2),
         low=round(float(latest["low"]), 2),
         close=round(float(latest["close"]), 2),
@@ -166,6 +169,78 @@ def describe_max_volume_area(frame: pd.DataFrame, max_volume_row: pd.Series) -> 
         f"最大量能K线之后共有 {len(after)} 根K线，其中 {inside_count} 根收盘在这根K线高低点范围内，"
         f"{location}，说明后续行情主要围绕这根最大量能K线的高低点展开。"
     )
+
+
+def build_observation_points(timeframe: str, frame: pd.DataFrame) -> list[str]:
+    max_volume_row = frame.loc[frame["volume"].idxmax()]
+    latest = frame.iloc[-1]
+    high = float(max_volume_row["high"])
+    low = float(max_volume_row["low"])
+    latest_close = float(latest["close"])
+    latest_oi = float(latest["open_interest"])
+    latest_volume = float(latest["volume"])
+    max_volume = float(max_volume_row["volume"])
+    after = frame[frame["datetime"] > max_volume_row["datetime"]]
+
+    if latest_close > high:
+        relation = f"当前收盘 {latest_close:.2f} 在最大成交量K线区间上方，上沿 {high:.2f} 是回看这一区间时最直接的压力/支撑转换位置。"
+    elif latest_close < low:
+        relation = f"当前收盘 {latest_close:.2f} 在最大成交量K线区间下方，下沿 {low:.2f} 是回看这一区间时最直接的压力/支撑转换位置。"
+    else:
+        relation = f"当前收盘 {latest_close:.2f} 仍在最大成交量K线 {low:.2f}-{high:.2f} 区间内部，行情仍被这根K线的高低点包住。"
+
+    points = [
+        (
+            f"{timeframe}最大成交量K线出现在 {format_dt(max_volume_row['datetime'])}，"
+            f"成交量 {int(max_volume)}，区间为 {low:.2f}-{high:.2f}；这个区间作为本周期观察锚点。"
+        ),
+        relation,
+    ]
+
+    if after.empty:
+        points.append("最大成交量K线之后还没有新的K线，暂时只能观察这根K线本身的高低点。")
+        return points
+
+    after_high = float(after["high"].max())
+    after_low = float(after["low"].min())
+    inside_close = int(((after["close"] >= low) & (after["close"] <= high)).sum())
+    above_close = int((after["close"] > high).sum())
+    below_close = int((after["close"] < low).sum())
+    upper_tests = int(((after["high"] >= high) & (after["low"] <= high)).sum())
+    lower_tests = int(((after["high"] >= low) & (after["low"] <= low)).sum())
+    oi_change_after = float(latest_oi - max_volume_row["open_interest"])
+    close_change_after = float(latest_close - max_volume_row["close"])
+
+    points.extend(
+        [
+            (
+                f"最大成交量K线之后共有 {len(after)} 根K线：收盘在区间内 {inside_close} 根，"
+                f"收盘在上沿之上 {above_close} 根，收盘在下沿之下 {below_close} 根。"
+            ),
+            (
+                f"后续K线实际波动范围为 {after_low:.2f}-{after_high:.2f}；"
+                f"上沿 {high:.2f} 被K线触及/穿越 {upper_tests} 次，下沿 {low:.2f} 被K线触及/穿越 {lower_tests} 次。"
+            ),
+            (
+                f"从最大成交量K线到最新K线，收盘变化 {close_change_after:+.2f}，"
+                f"持仓量变化 {oi_change_after:+.0f}，最新成交量 {int(latest_volume)}。"
+            ),
+        ]
+    )
+    points.append(describe_participant_attitude(close_change_after, oi_change_after))
+    return points
+
+
+def describe_participant_attitude(close_change: float, oi_change: float) -> str:
+    if close_change > 0 and oi_change > 0:
+        return "从最大成交量K线之后看，价格上移且持仓增加，说明多方主动参与增加。"
+    if close_change < 0 and oi_change > 0:
+        return "从最大成交量K线之后看，价格下移且持仓增加，说明空方主动参与增加。"
+    if close_change > 0 and oi_change < 0:
+        return "从最大成交量K线之后看，价格上移但持仓减少，说明上涨过程中有持仓退出。"
+    if close_change < 0 and oi_change < 0:
+        return "从最大成交量K线之后看，价格下移但持仓减少，说明下跌过程中有持仓退出。"
+    return "从最大成交量K线之后看，价格和持仓变化不明显，双方态度暂未拉开。"
 
 
 def describe_open_interest(frame: pd.DataFrame) -> str:
