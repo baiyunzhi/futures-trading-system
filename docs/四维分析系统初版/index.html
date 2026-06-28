@@ -56,6 +56,9 @@
       margin: 0 0 8px;
       font-size: 18px;
     }
+    .selection-module .sub-title {
+      margin-top: 16px;
+    }
     .selection-module p {
       margin: 0 0 12px;
       color: #d7dee8;
@@ -233,6 +236,31 @@
               <p>日线两个月收盘变化 -3.04%，动态观察位 1 层，持仓变化 111042。</p>
             </section>
             </div>
+        <h2 class="sub-title">跨周期放量事件队列</h2>
+        <p>
+          成交量最大K线是观察起点；不同周期的放量事件先进入同一队列，再回到各自周期观察后续支撑、压力和持仓变化。
+        </p>
+        <div class="selection-grid">
+            <section class="selection-card event-card">
+              <b>PVC(V0) · 周线</b>
+              <p>2026-05-15 00:00，成交量 5500592，区间 5024.00-5257.00。</p>
+            </section>
+            
+            <section class="selection-card event-card">
+              <b>螺纹钢(RB0) · 周线</b>
+              <p>2026-05-29 00:00，成交量 4458859，区间 3136.00-3238.00。</p>
+            </section>
+            
+            <section class="selection-card event-card">
+              <b>PVC(V0) · 日线</b>
+              <p>2026-05-14 00:00，成交量 1665931，区间 5054.00-5257.00。</p>
+            </section>
+            
+            <section class="selection-card event-card">
+              <b>螺纹钢(RB0) · 日线</b>
+              <p>2026-05-26 00:00，成交量 1515821，区间 3138.00-3218.00。</p>
+            </section>
+            </div>
       </section>
     <h2 class="period-group-title">日线对比</h2>
 
@@ -247,7 +275,7 @@
             <div class="kline-detail" id="detail-RB0-日线">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
           </div>
           <aside class="info-pane">
-            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">锚点区间拉锯</span><span class="tag">接近当前压力位</span><span class="tag">支撑转压力</span><span class="tag">原锚点有效</span><span class="tag">B类备选</span></div>
+            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">锚点区间拉锯</span><span class="tag">接近当前压力位</span><span class="tag">支撑转压力</span><span class="tag">原锚点有效</span><span class="tag">异常放量事件</span><span class="tag">锚点减仓</span><span class="tag">压力位空方防守</span><span class="tag">B类备选</span></div>
             
       <section class="line-item">
         <b>1. 当前状态</b>
@@ -257,13 +285,13 @@
             
       <section class="line-item">
         <b>2. 当前观察位</b>
-        <p>压力 3138.00，距最新收盘 1.45%；支撑 3080.00，距最新收盘 0.42%。最大量K线 2026-05-26 00:00，区间 3138.00-3218.00。观察位链条：3138.00。当前按最近失守位 3138.00 作为压力观察位。 当前下方未确认支撑为 3080.00。当前仍以原最大成交量K线作为观察锚点。</p>
+        <p>压力 3138.00，距最新收盘 1.45%；支撑 3080.00，距最新收盘 0.42%。最大量K线 2026-05-26 00:00，区间 3138.00-3218.00。最大量K线性质：收阴，实体收阴，说明该周期空方推进更主动；成交量为本周期最大，是次大量的 1.28 倍。持仓较前一根减少 59188，说明这根放量包含持仓退出。观察位链条：3138.00。当前按最近失守位 3138.00 作为压力观察位。 当前下方未确认支撑为 3080.00。当前仍以原最大成交量K线作为观察锚点。</p>
       </section>
     
             
       <section class="line-item">
         <b>3. 等待原因</b>
-        <p>价格已接近当前压力观察位，等待收盘不能重新站回，同时观察成交量和持仓量是否不支持上攻。锚点提示：原锚点仍有效，继续观察其高低点的支撑压力转换。</p>
+        <p>价格已接近当前压力观察位，等待收盘不能重新站回，同时观察成交量和持仓量是否不支持上攻。锚点提示：原锚点仍有效，继续观察其高低点的支撑压力转换。量仓确认：当前在压力观察位附近，成交量缩小、持仓增加。反抽未站回压力位且持仓增加，空方仍在压力位附近参与。</p>
       </section>
     
             
@@ -294,7 +322,7 @@
             <div class="kline-detail" id="detail-V0-日线">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
           </div>
           <aside class="info-pane">
-            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">远离当前压力位</span><span class="tag">动态观察位下移</span><span class="tag">原锚点有效</span><span class="tag">弱势震荡</span><span class="tag">风险收益合格</span><span class="tag">A类优先</span></div>
+            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">远离当前压力位</span><span class="tag">动态观察位下移</span><span class="tag">原锚点有效</span><span class="tag">异常放量事件</span><span class="tag">锚点增仓</span><span class="tag">远离观察位待确认</span><span class="tag">弱势震荡</span><span class="tag">风险收益合格</span><span class="tag">A类优先</span></div>
             
       <section class="line-item">
         <b>1. 当前状态</b>
@@ -304,13 +332,13 @@
             
       <section class="line-item">
         <b>2. 当前观察位</b>
-        <p>压力 4652.00，距最新收盘 6.02%；支撑 4385.00，距最新收盘 0.07%。最大量K线 2026-05-14 00:00，区间 5054.00-5257.00。观察位链条：5054.00 → 4804.00 → 4652.00。当前按最近失守位 4652.00 作为压力观察位。 当前下方未确认支撑为 4385.00。当前仍以原最大成交量K线作为观察锚点。</p>
+        <p>压力 4652.00，距最新收盘 6.02%；支撑 4385.00，距最新收盘 0.07%。最大量K线 2026-05-14 00:00，区间 5054.00-5257.00。最大量K线性质：收阴，实体收阴，说明该周期空方推进更主动；成交量为本周期最大，是次大量的 1.23 倍。持仓较前一根增加 72771，说明这根放量包含新资金参与。观察位链条：5054.00 → 4804.00 → 4652.00。当前按最近失守位 4652.00 作为压力观察位。 当前下方未确认支撑为 4385.00。当前仍以原最大成交量K线作为观察锚点。</p>
       </section>
     
             
       <section class="line-item">
         <b>3. 等待原因</b>
-        <p>当前价格距离最近压力观察位 6.02%，不适合追空，等待反抽靠近当前压力位。锚点提示：原锚点仍有效，继续观察其高低点的支撑压力转换。弱势震荡观察：2026-06-23 00:00 前低 4439.00 被跌破前，价格在 4529.00-4540.00 附近反抽停滞；再次跌破后，该前低成为新压力观察位。</p>
+        <p>当前价格距离最近压力观察位 6.02%，不适合追空，等待反抽靠近当前压力位。锚点提示：原锚点仍有效，继续观察其高低点的支撑压力转换。量仓确认：当前未贴近最近观察位；最新一根成交量缩小、持仓增加，只能说明当下态度，不能作为支撑/压力确认。弱势震荡观察：2026-06-23 00:00 前低 4439.00 被跌破前，价格在 4529.00-4540.00 附近反抽停滞；再次跌破后，该前低成为新压力观察位。</p>
       </section>
     
             
@@ -342,7 +370,7 @@
             <div class="kline-detail" id="detail-RB0-周线">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
           </div>
           <aside class="info-pane">
-            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">锚点区间拉锯</span><span class="tag">接近当前压力位</span><span class="tag">支撑转压力</span><span class="tag">候选新锚点</span><span class="tag">B类备选</span></div>
+            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">锚点区间拉锯</span><span class="tag">接近当前压力位</span><span class="tag">支撑转压力</span><span class="tag">候选新锚点</span><span class="tag">周期最大量事件</span><span class="tag">锚点减仓</span><span class="tag">压力位空方防守</span><span class="tag">B类备选</span></div>
             
       <section class="line-item">
         <b>1. 当前状态</b>
@@ -352,13 +380,13 @@
             
       <section class="line-item">
         <b>2. 当前观察位</b>
-        <p>压力 3136.00，距最新收盘 1.39%；支撑 3080.00，距最新收盘 0.42%。最大量K线 2026-05-29 00:00，区间 3136.00-3238.00。观察位链条：3136.00。当前按最近失守位 3136.00 作为压力观察位。 当前下方未确认支撑为 3080.00。候选新锚点 2026-06-12 00:00，成交量为原锚点的 78.6%，区间 3142.00-3194.00。</p>
+        <p>压力 3136.00，距最新收盘 1.39%；支撑 3080.00，距最新收盘 0.42%。最大量K线 2026-05-29 00:00，区间 3136.00-3238.00。最大量K线性质：收阴，小实体，说明多空在该区间激烈换手后暂未分出明显胜负；成交量为本周期最大，是次大量的 1.02 倍。持仓较前一根减少 75408，说明这根放量包含持仓退出。观察位链条：3136.00。当前按最近失守位 3136.00 作为压力观察位。 当前下方未确认支撑为 3080.00。候选新锚点 2026-06-12 00:00，成交量为原锚点的 78.6%，区间 3142.00-3194.00。</p>
       </section>
     
             
       <section class="line-item">
         <b>3. 等待原因</b>
-        <p>价格已接近当前压力观察位，等待收盘不能重新站回，同时观察成交量和持仓量是否不支持上攻。锚点提示：后续观察价格是否继续围绕候选新锚点高低点波动，确认后再替换原锚点。</p>
+        <p>价格已接近当前压力观察位，等待收盘不能重新站回，同时观察成交量和持仓量是否不支持上攻。锚点提示：后续观察价格是否继续围绕候选新锚点高低点波动，确认后再替换原锚点。量仓确认：当前在压力观察位附近，成交量放大、持仓增加。反抽未站回压力位且持仓增加，空方仍在压力位附近参与。</p>
       </section>
     
             
@@ -389,7 +417,7 @@
             <div class="kline-detail" id="detail-V0-周线">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
           </div>
           <aside class="info-pane">
-            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">远离当前压力位</span><span class="tag">支撑转压力</span><span class="tag">候选新锚点</span><span class="tag">A类优先</span></div>
+            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">远离当前压力位</span><span class="tag">支撑转压力</span><span class="tag">候选新锚点</span><span class="tag">周期最大量事件</span><span class="tag">锚点增仓</span><span class="tag">远离观察位待确认</span><span class="tag">A类优先</span></div>
             
       <section class="line-item">
         <b>1. 当前状态</b>
@@ -399,13 +427,13 @@
             
       <section class="line-item">
         <b>2. 当前观察位</b>
-        <p>压力 5024.00，距最新收盘 14.49%；支撑 4385.00，距最新收盘 0.07%。最大量K线 2026-05-15 00:00，区间 5024.00-5257.00。观察位链条：5024.00。当前按最近失守位 5024.00 作为压力观察位。 当前下方未确认支撑为 4385.00。候选新锚点 2026-05-22 00:00，成交量为原锚点的 97.2%，区间 4804.00-5144.00。</p>
+        <p>压力 5024.00，距最新收盘 14.49%；支撑 4385.00，距最新收盘 0.07%。最大量K线 2026-05-15 00:00，区间 5024.00-5257.00。最大量K线性质：收阴，长上影，说明上方抛压或空方反击明显；成交量为本周期最大，是次大量的 1.03 倍。持仓较前一根增加 61790，说明这根放量包含新资金参与。观察位链条：5024.00。当前按最近失守位 5024.00 作为压力观察位。 当前下方未确认支撑为 4385.00。候选新锚点 2026-05-22 00:00，成交量为原锚点的 97.2%，区间 4804.00-5144.00。</p>
       </section>
     
             
       <section class="line-item">
         <b>3. 等待原因</b>
-        <p>当前价格距离最近压力观察位 14.49%，不适合追空，等待反抽靠近当前压力位。锚点提示：后续观察价格是否继续围绕候选新锚点高低点波动，确认后再替换原锚点。</p>
+        <p>当前价格距离最近压力观察位 14.49%，不适合追空，等待反抽靠近当前压力位。锚点提示：后续观察价格是否继续围绕候选新锚点高低点波动，确认后再替换原锚点。量仓确认：当前未贴近最近观察位；最新一根成交量放大、持仓增加，只能说明当下态度，不能作为支撑/压力确认。</p>
       </section>
     
             
@@ -437,7 +465,7 @@
             <div class="kline-detail" id="detail-RB0-小时线">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
           </div>
           <aside class="info-pane">
-            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">接近当前压力位</span><span class="tag">动态观察位下移</span><span class="tag">原锚点有效</span><span class="tag">B类备选</span></div>
+            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">接近当前压力位</span><span class="tag">动态观察位下移</span><span class="tag">原锚点有效</span><span class="tag">周期最大量事件</span><span class="tag">锚点减仓</span><span class="tag">压力位反抽无力</span><span class="tag">B类备选</span></div>
             
       <section class="line-item">
         <b>1. 当前状态</b>
@@ -447,13 +475,13 @@
             
       <section class="line-item">
         <b>2. 当前观察位</b>
-        <p>压力 3114.00，距最新收盘 0.87%；支撑 3080.00，距最新收盘 0.23%。最大量K线 2026-05-25 22:00，区间 3181.00-3217.00。观察位链条：3181.00 → 3140.00 → 3114.00。当前按最近失守位 3114.00 作为压力观察位。 当前下方未确认支撑为 3080.00。当前仍以原最大成交量K线作为观察锚点。</p>
+        <p>压力 3114.00，距最新收盘 0.87%；支撑 3080.00，距最新收盘 0.23%。最大量K线 2026-05-25 22:00，区间 3181.00-3217.00。最大量K线性质：收阴，实体收阴，说明该周期空方推进更主动；成交量为本周期最大，是次大量的 1.07 倍。持仓较前一根减少 2087，说明这根放量包含持仓退出。观察位链条：3181.00 → 3140.00 → 3114.00。当前按最近失守位 3114.00 作为压力观察位。 当前下方未确认支撑为 3080.00。当前仍以原最大成交量K线作为观察锚点。</p>
       </section>
     
             
       <section class="line-item">
         <b>3. 等待原因</b>
-        <p>当前压力观察位已经明确，下一步只等待具体触发条件，不提前追价。锚点提示：原锚点仍有效，继续观察其高低点的支撑压力转换。</p>
+        <p>当前压力观察位已经明确，下一步只等待具体触发条件，不提前追价。锚点提示：原锚点仍有效，继续观察其高低点的支撑压力转换。量仓确认：当前在压力观察位附近，成交量缩小、持仓减少。反抽没有得到成交量和持仓量支持，压力位继续有效。</p>
       </section>
     
             
@@ -484,7 +512,7 @@
             <div class="kline-detail" id="detail-V0-小时线">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
           </div>
           <aside class="info-pane">
-            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">接近当前压力位</span><span class="tag">动态观察位下移</span><span class="tag">原锚点有效</span><span class="tag">A类优先</span></div>
+            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">接近当前压力位</span><span class="tag">动态观察位下移</span><span class="tag">原锚点有效</span><span class="tag">异常放量事件</span><span class="tag">锚点增仓</span><span class="tag">压力位反抽无力</span><span class="tag">A类优先</span></div>
             
       <section class="line-item">
         <b>1. 当前状态</b>
@@ -494,13 +522,13 @@
             
       <section class="line-item">
         <b>2. 当前观察位</b>
-        <p>压力 4440.00，距最新收盘 1.32%；支撑 4370.00，距最新收盘 0.27%。最大量K线 2026-05-13 22:00，区间 5162.00-5256.00。观察位链条：5162.00 → 4722.00 → 4668.00 → 4624.00 → 4440.00。当前按最近失守位 4440.00 作为压力观察位。 当前下方未确认支撑为 4370.00。当前仍以原最大成交量K线作为观察锚点。</p>
+        <p>压力 4440.00，距最新收盘 1.32%；支撑 4370.00，距最新收盘 0.27%。最大量K线 2026-05-13 22:00，区间 5162.00-5256.00。最大量K线性质：收阴，实体收阴，说明该周期空方推进更主动；成交量为本周期最大，是次大量的 1.39 倍。持仓较前一根增加 54157，说明这根放量包含新资金参与。观察位链条：5162.00 → 4722.00 → 4668.00 → 4624.00 → 4440.00。当前按最近失守位 4440.00 作为压力观察位。 当前下方未确认支撑为 4370.00。当前仍以原最大成交量K线作为观察锚点。</p>
       </section>
     
             
       <section class="line-item">
         <b>3. 等待原因</b>
-        <p>价格已接近当前压力观察位，等待收盘不能重新站回，同时观察成交量和持仓量是否不支持上攻。锚点提示：原锚点仍有效，继续观察其高低点的支撑压力转换。</p>
+        <p>价格已接近当前压力观察位，等待收盘不能重新站回，同时观察成交量和持仓量是否不支持上攻。锚点提示：原锚点仍有效，继续观察其高低点的支撑压力转换。量仓确认：当前在压力观察位附近，成交量缩小、持仓减少。反抽没有得到成交量和持仓量支持，压力位继续有效。</p>
       </section>
     
             

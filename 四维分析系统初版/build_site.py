@@ -43,6 +43,118 @@ def pct(distance: float, close: float) -> float:
     return abs(distance - close) / close * 100 if close else 999.0
 
 
+def anchor_event_profile(data: pd.DataFrame, anchor: pd.Series) -> dict[str, object]:
+    ordered = data.sort_values("datetime").reset_index(drop=True)
+    anchor_time = anchor["datetime"]
+    idx_matches = ordered.index[ordered["datetime"] == anchor_time].tolist()
+    idx = idx_matches[0] if idx_matches else int(ordered["volume"].idxmax())
+    previous = ordered.iloc[idx - 1] if idx > 0 else None
+    high = float(anchor["high"])
+    low = float(anchor["low"])
+    open_ = float(anchor["open"])
+    close = float(anchor["close"])
+    volume = float(anchor["volume"])
+    ranked_volume = ordered["volume"].sort_values(ascending=False).reset_index(drop=True)
+    second_volume = float(ranked_volume.iloc[1]) if len(ranked_volume) > 1 else volume
+    volume_ratio = volume / second_volume if second_volume else 1.0
+    price_range = max(0.01, high - low)
+    body = abs(close - open_)
+    upper_shadow = high - max(open_, close)
+    lower_shadow = min(open_, close) - low
+    direction = "收阳" if close >= open_ else "收阴"
+    if body <= price_range * 0.25:
+        shape = "小实体，说明多空在该区间激烈换手后暂未分出明显胜负"
+    elif upper_shadow >= price_range * 0.4:
+        shape = "长上影，说明上方抛压或空方反击明显"
+    elif lower_shadow >= price_range * 0.4:
+        shape = "长下影，说明下方承接或多方反击明显"
+    elif close > open_:
+        shape = "实体收阳，说明该周期多方推进更主动"
+    else:
+        shape = "实体收阴，说明该周期空方推进更主动"
+    if previous is None:
+        oi_text = "持仓量没有前一根K线可比。"
+        oi_tag = "锚点持仓待比对"
+    else:
+        oi_delta = float(anchor["open_interest"] - previous["open_interest"])
+        if oi_delta > 0:
+            oi_text = f"持仓较前一根增加 {oi_delta:.0f}，说明这根放量包含新资金参与。"
+            oi_tag = "锚点增仓"
+        elif oi_delta < 0:
+            oi_text = f"持仓较前一根减少 {abs(oi_delta):.0f}，说明这根放量包含持仓退出。"
+            oi_tag = "锚点减仓"
+        else:
+            oi_text = "持仓较前一根基本不变，说明主要是换手。"
+            oi_tag = "锚点换手"
+    event_tag = "异常放量事件" if volume_ratio >= 1.2 else "周期最大量事件"
+    text = (
+        f"最大量K线性质：{direction}，{shape}；成交量为本周期最大，"
+        f"是次大量的 {volume_ratio:.2f} 倍。{oi_text}"
+    )
+    return {"tags": [event_tag, oi_tag], "text": text}
+
+
+def location_volume_confirmation(
+    data: pd.DataFrame,
+    pressure: float,
+    support: float,
+    tags: list[str],
+) -> dict[str, object]:
+    ordered = data.sort_values("datetime").reset_index(drop=True)
+    if len(ordered) < 2:
+        return {"tags": ["量仓确认不足"], "text": "量仓确认：K线数量不足，不能判断观察位附近的态度。"}
+    latest = ordered.iloc[-1]
+    previous = ordered.iloc[-2]
+    latest_close = float(latest["close"])
+    latest_high = float(latest["high"])
+    latest_low = float(latest["low"])
+    latest_volume = float(latest["volume"])
+    previous_volume = float(previous["volume"])
+    oi_delta = float(latest["open_interest"] - previous["open_interest"])
+    volume_text = "成交量放大" if latest_volume > previous_volume else "成交量缩小" if latest_volume < previous_volume else "成交量持平"
+    oi_text = "持仓增加" if oi_delta > 0 else "持仓减少" if oi_delta < 0 else "持仓持平"
+    near_pressure = pct(pressure, latest_close) <= 2.5 or abs(latest_high - pressure) / latest_close * 100 <= 1.2
+    near_support = pct(support, latest_close) <= 2.5 or abs(latest_low - support) / latest_close * 100 <= 1.2
+
+    if ("动态观察位下移" in tags or "支撑转压力" in tags) and near_pressure:
+        if latest_close <= pressure and latest_volume <= previous_volume and oi_delta <= 0:
+            tag = "压力位反抽无力"
+            result = "反抽没有得到成交量和持仓量支持，压力位继续有效。"
+        elif latest_close <= pressure and oi_delta > 0:
+            tag = "压力位空方防守"
+            result = "反抽未站回压力位且持仓增加，空方仍在压力位附近参与。"
+        elif latest_close > pressure and latest_volume > previous_volume and oi_delta > 0:
+            tag = "压力位被挑战"
+            result = "价格站回压力位且成交量、持仓量同步增加，原压力位需要重新验证。"
+        else:
+            tag = "压力位待确认"
+            result = "价格接近压力位，但成交量和持仓量没有给出单边态度。"
+        text = f"量仓确认：当前在压力观察位附近，{volume_text}、{oi_text}。{result}"
+        return {"tags": [tag], "text": text}
+
+    if "压力转支撑" in tags and near_support:
+        if latest_close >= support and latest_volume <= previous_volume and oi_delta <= 0:
+            tag = "支撑位回踩无力"
+            result = "回踩没有得到下行动能支持，支撑位继续有效。"
+        elif latest_close >= support and oi_delta > 0:
+            tag = "支撑位多方防守"
+            result = "价格守住支撑且持仓增加，多方仍在支撑位附近参与。"
+        elif latest_close < support and latest_volume > previous_volume and oi_delta > 0:
+            tag = "支撑位被挑战"
+            result = "价格跌回支撑位下方且成交量、持仓量同步增加，原支撑位需要重新验证。"
+        else:
+            tag = "支撑位待确认"
+            result = "价格接近支撑位，但成交量和持仓量没有给出单边态度。"
+        text = f"量仓确认：当前在支撑观察位附近，{volume_text}、{oi_text}。{result}"
+        return {"tags": [tag], "text": text}
+
+    text = (
+        f"量仓确认：当前未贴近最近观察位；最新一根{volume_text}、{oi_text}，"
+        "只能说明当下态度，不能作为支撑/压力确认。"
+    )
+    return {"tags": ["远离观察位待确认"], "text": text}
+
+
 def build_symbol_priorities(frames_by_symbol: dict[str, dict[str, pd.DataFrame]]) -> dict[str, dict[str, object]]:
     rows: list[dict[str, object]] = []
     for symbol, frames in frames_by_symbol.items():
@@ -133,6 +245,7 @@ def period_card(
     pressure_distance = pct(pressure, latest_close)
     support_distance = pct(support, latest_close)
     anchor_state = analyze_anchor_state(data, anchor, after, latest_close, pressure, support)
+    anchor_event = anchor_event_profile(data, anchor)
     below_ratio = float((after["close"] < anchor_low).sum() / len(after)) if len(after) else 0.0
     above_ratio = float((after["close"] > anchor_high).sum() / len(after)) if len(after) else 0.0
     inside_ratio = float(((after["close"] >= anchor_low) & (after["close"] <= anchor_high)).sum() / len(after)) if len(after) else 0.0
@@ -152,6 +265,9 @@ def period_card(
     tags = normalize_distance_tags(tags, observation_chain, pressure_distance, support_distance)
     tags.extend(chain_tags(observation_chain))
     tags.append(anchor_state["state"])
+    tags.extend(anchor_event["tags"])
+    volume_confirmation = location_volume_confirmation(data, pressure, support, tags)
+    tags.extend(volume_confirmation["tags"])
     weak_observation = weak_consolidation_observation(data, observation_chain)
     tags.extend(weak_observation["tags"])
     if priority:
@@ -159,6 +275,7 @@ def period_card(
     readiness_level, readiness_text = readiness_from_current_observation(tags, pressure_distance, support_distance)
     wait_reason = waiting_reason_from_current_observation(tags, pressure_distance, support_distance, readiness_level)
     wait_reason = combine_wait_reason(wait_reason, anchor_state)
+    wait_reason = combine_volume_confirmation(wait_reason, volume_confirmation)
     wait_reason = combine_weak_wait_reason(wait_reason, weak_observation)
     status = build_status(
         tags,
@@ -177,6 +294,7 @@ def period_card(
         f"压力 {pressure:.2f}，距最新收盘 {pressure_distance:.2f}%；"
         f"支撑 {support:.2f}，距最新收盘 {support_distance:.2f}%。"
         f"最大量K线 {format_dt(anchor['datetime'])}，区间 {anchor_low:.2f}-{anchor_high:.2f}。"
+        f"{anchor_event['text']}"
         f"{observation_chain['text']}"
         f"{anchor_state['observe']}"
     )
@@ -463,6 +581,10 @@ def combine_wait_reason(wait_reason: str, anchor_state: dict[str, object]) -> st
     return f"{wait_reason}锚点提示：{anchor_state['wait']}"
 
 
+def combine_volume_confirmation(wait_reason: str, volume_confirmation: dict[str, object]) -> str:
+    return f"{wait_reason}{volume_confirmation['text']}"
+
+
 def weak_consolidation_observation(data: pd.DataFrame, observation_chain: dict[str, object]) -> dict[str, object]:
     levels = observation_chain.get("levels", [])
     if not levels:
@@ -741,11 +863,49 @@ def build_frames_by_symbol(data: dict[str, pd.DataFrame]) -> dict[str, dict[str,
     return frames_by_symbol
 
 
-def build_selection_module(priorities: dict[str, dict[str, object]]) -> str:
+def build_event_queue(frames_by_symbol: dict[str, dict[str, pd.DataFrame]]) -> list[dict[str, object]]:
+    events: list[dict[str, object]] = []
+    for symbol, frames in frames_by_symbol.items():
+        for timeframe, frame in frames.items():
+            data = frame.sort_values("datetime").reset_index(drop=True)
+            if data.empty:
+                continue
+            anchor = data.loc[data["volume"].idxmax()]
+            profile = anchor_event_profile(data, anchor)
+            events.append(
+                {
+                    "symbol": symbol,
+                    "name": SYMBOLS[symbol]["name"],
+                    "timeframe": timeframe,
+                    "time": anchor["datetime"],
+                    "volume": float(anchor["volume"]),
+                    "low": float(anchor["low"]),
+                    "high": float(anchor["high"]),
+                    "text": profile["text"],
+                }
+            )
+    events.sort(key=lambda item: float(item["volume"]), reverse=True)
+    return events
+
+
+def build_selection_module(
+    priorities: dict[str, dict[str, object]],
+    frames_by_symbol: dict[str, dict[str, pd.DataFrame]],
+) -> str:
     if not priorities:
         return ""
     rows = sorted(priorities.values(), key=lambda item: int(item["rank"]))
     leader = rows[0]
+    event_items = []
+    for event in build_event_queue(frames_by_symbol)[:4]:
+        event_items.append(
+            f"""
+            <section class="selection-card event-card">
+              <b>{escape(str(event['name']))}({escape(str(event['symbol']))}) · {escape(str(event['timeframe']))}</b>
+              <p>{escape(format_dt(event['time']))}，成交量 {float(event['volume']):.0f}，区间 {float(event['low']):.2f}-{float(event['high']):.2f}。</p>
+            </section>
+            """
+        )
     cards = []
     for row in rows:
         cards.append(
@@ -764,6 +924,11 @@ def build_selection_module(priorities: dict[str, dict[str, object]]) -> str:
           工作流顺序：先确定最弱或最强品种，再看当前观察位，再等待反抽或回踩，最后只在风险收益比合格时进入准备。
         </p>
         <div class="selection-grid">{''.join(cards)}</div>
+        <h2 class="sub-title">跨周期放量事件队列</h2>
+        <p>
+          成交量最大K线是观察起点；不同周期的放量事件先进入同一队列，再回到各自周期观察后续支撑、压力和持仓变化。
+        </p>
+        <div class="selection-grid">{''.join(event_items)}</div>
       </section>
     """
 
@@ -790,7 +955,7 @@ def render() -> str:
     data = load_market_data(DATA_FILES)
     frames_by_symbol = build_frames_by_symbol(data)
     priorities = build_symbol_priorities(frames_by_symbol)
-    blocks = build_selection_module(priorities) + timeframe_sections(frames_by_symbol, priorities)
+    blocks = build_selection_module(priorities, frames_by_symbol) + timeframe_sections(frames_by_symbol, priorities)
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -848,6 +1013,9 @@ def render() -> str:
     .selection-module h2 {{
       margin: 0 0 8px;
       font-size: 18px;
+    }}
+    .selection-module .sub-title {{
+      margin-top: 16px;
     }}
     .selection-module p {{
       margin: 0 0 12px;
