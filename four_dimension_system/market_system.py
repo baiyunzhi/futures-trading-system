@@ -228,7 +228,65 @@ def build_observation_points(timeframe: str, frame: pd.DataFrame) -> list[str]:
         ]
     )
     points.append(describe_participant_attitude(close_change_after, oi_change_after))
+    if timeframe == "日线":
+        points.extend(build_daily_pressure_plan(frame))
     return points
+
+
+def build_daily_pressure_plan(frame: pd.DataFrame) -> list[str]:
+    day_0601 = get_row_by_date(frame, "2026-06-01")
+    day_0610 = get_row_by_date(frame, "2026-06-10")
+    max_volume_row = frame.loc[frame["volume"].idxmax()]
+    if day_0601 is None or day_0610 is None:
+        return []
+
+    pressure = float(day_0601["high"])
+    failed_break_high = float(day_0610["high"])
+    stop_line = 3200.0
+    stop_price = stop_line + 1.0
+    target = float(max_volume_row["low"])
+    risk = stop_price - pressure
+    reward = pressure - target
+    ratio = reward / risk if risk > 0 else 0.0
+    oi_change = float(day_0610["open_interest"] - day_0601["open_interest"])
+    volume_change = float(day_0610["volume"] - day_0601["volume"])
+
+    return [
+        (
+            f"日线压力观察：6月1日收阳后行情逐步回落，6月1日高点 {pressure:.2f} 形成压力参考；"
+            f"6月10日盘中最高 {failed_break_high:.2f} 越过6月1日高点，但收盘 {float(day_0610['close']):.2f} "
+            f"回到压力位内，说明 {pressure:.2f}-{failed_break_high:.2f} 压力继续有效。"
+        ),
+        (
+            f"日线计划区间：把 {pressure:.2f}-3200.00 作为轻仓试空观察带，不把 {pressure:.2f} 当作必然成交价；"
+            f"盘中冲高失败可在 {pressure:.2f} 附近试空，收盘后确认失败则等待反抽到该区域再观察。"
+        ),
+        (
+            f"风险收益测算：按 {pressure:.2f} 附近试空、止损 {stop_price:.2f}、目标最大成交量K线低点 {target:.2f} 计算，"
+            f"风险 {risk:.2f} 点，目标空间 {reward:.2f} 点，风险利润比约 1:{ratio:.2f}。"
+        ),
+        (
+            "盘中强弱量化：若价格进入 3189.00-3200.00 后不能连续2根15分钟K线收在3200上方，"
+            "也不能1根小时K线收在3200上方，压力带仍按有效观察；若放量增仓并站上3200，则不做空。"
+        ),
+        (
+            "成交量和持仓量前提：冲击压力带时成交量可以放大，但价格必须收不住3200；"
+            "持仓量增加但价格站不住，属于增仓冲高失败；持仓量减少，则说明上攻缺少新增推动。"
+        ),
+        (
+            f"6月1日至6月10日对比：成交量从 {int(day_0601['volume'])} 增至 {int(day_0610['volume'])}，"
+            f"变化 {volume_change:+.0f}；持仓量从 {int(day_0601['open_interest'])} 变为 {int(day_0610['open_interest'])}，"
+            f"变化 {oi_change:+.0f}，说明6月10日冲高回落时并不是明显增仓上攻。"
+        ),
+    ]
+
+
+def get_row_by_date(frame: pd.DataFrame, date_text: str) -> pd.Series | None:
+    date = pd.to_datetime(date_text).date()
+    matched = frame[frame["datetime"].dt.date == date]
+    if matched.empty:
+        return None
+    return matched.iloc[0]
 
 
 def describe_participant_attitude(close_change: float, oi_change: float) -> str:
