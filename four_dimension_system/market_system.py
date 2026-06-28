@@ -231,270 +231,171 @@ def build_observation_points(timeframe: str, frame: pd.DataFrame) -> list[str]:
         ]
     )
     points.append(describe_participant_attitude(close_change_after, oi_change_after))
-    if timeframe == "日线":
-        points.extend(build_daily_pressure_plan(frame))
     return points
 
 
-def build_daily_pressure_plan(frame: pd.DataFrame) -> list[str]:
-    day_0601 = get_row_by_date(frame, "2026-06-01")
-    day_0610 = get_row_by_date(frame, "2026-06-10")
-    max_volume_row = frame.loc[frame["volume"].idxmax()]
-    if day_0601 is None or day_0610 is None:
-        return []
+def build_workflow_alerts(timeframe: str, frame: pd.DataFrame) -> list[str]:
+    return build_max_volume_anchor_workflow(timeframe, frame)
 
-    pressure = float(day_0601["high"])
-    failed_break_high = float(day_0610["high"])
-    stop_line = 3200.0
-    stop_price = stop_line + 1.0
-    target = float(max_volume_row["low"])
-    risk = stop_price - pressure
-    reward = pressure - target
-    ratio = reward / risk if risk > 0 else 0.0
-    oi_change = float(day_0610["open_interest"] - day_0601["open_interest"])
-    volume_change = float(day_0610["volume"] - day_0601["volume"])
+
+def build_max_volume_anchor_workflow(timeframe: str, frame: pd.DataFrame) -> list[str]:
+    max_volume_row = frame.loc[frame["volume"].idxmax()]
+    after = frame[frame["datetime"] > max_volume_row["datetime"]]
+    high = float(max_volume_row["high"])
+    low = float(max_volume_row["low"])
+    close = float(max_volume_row["close"])
+    volume = float(max_volume_row["volume"])
+    latest = frame.iloc[-1]
+    latest_close = float(latest["close"])
+    latest_high = float(latest["high"])
+    latest_low = float(latest["low"])
+
+    alerts = [
+        (
+            f"{timeframe}工作流锚点：系统优先选择最大成交量K线作为观察点，时间 {format_dt(max_volume_row['datetime'])}，"
+            f"成交量 {int(volume)}，区间 {low:.2f}-{high:.2f}，收盘 {close:.2f}。"
+        ),
+        (
+            "工作流原则：最大成交量K线高点先作为压力观察，低点先作为支撑观察；"
+            "后续行情突破、跌破、假突破、反抽失败，都围绕这根K线的高低点描述。"
+        ),
+    ]
+
+    if after.empty:
+        alerts.append("当前状态：最大成交量K线之后还没有后续K线，系统只能标出锚点，等待后续行情演化。")
+        return alerts
+
+    first_up_break = first_row(after[after["high"] > high])
+    first_down_break = first_row(after[after["low"] < low])
+    latest_up_reclaim = first_row(after[(after["close"] > high)])
+    latest_down_accept = first_row(after[(after["close"] < low)])
+    false_up = first_row(after[(after["high"] > high) & (after["close"] <= high)])
+    false_down = first_row(after[(after["low"] < low) & (after["close"] >= low)])
+    retest_pressure = first_row(after[(after["high"] >= low) & (after["close"] < low)])
+    retest_support = first_row(after[(after["low"] <= high) & (after["close"] > high)])
+
+    inside_count = int(((after["close"] >= low) & (after["close"] <= high)).sum())
+    above_count = int((after["close"] > high).sum())
+    below_count = int((after["close"] < low).sum())
+    alerts.append(
+        f"后续演化统计：最大量K线之后共 {len(after)} 根K线，收盘在区间内 {inside_count} 根，"
+        f"收盘在高点上方 {above_count} 根，收盘在低点下方 {below_count} 根。"
+    )
+
+    if latest_close > high:
+        alerts.append(
+            f"当前状态：最新收盘 {latest_close:.2f} 在最大量K线高点 {high:.2f} 上方，"
+            "说明行情已经重新站到锚点区间上方，原高点压力被市场接受，不能继续按该高点压力做空。"
+        )
+    elif latest_close < low:
+        alerts.append(
+            f"当前状态：最新收盘 {latest_close:.2f} 在最大量K线低点 {low:.2f} 下方，"
+            f"说明原支撑 {low:.2f} 已被跌破，系统把 {low:.2f} 转为反抽压力观察位。"
+        )
+    else:
+        alerts.append(
+            f"当前状态：最新收盘 {latest_close:.2f} 仍在最大量K线区间 {low:.2f}-{high:.2f} 内，"
+            "行情仍围绕锚点区间震荡，等待靠近高点或低点后的量仓确认。"
+        )
+
+    if first_up_break is not None:
+        alerts.append(
+            f"高点演化：{format_dt(first_up_break['datetime'])} 盘中突破最大量K线高点 {high:.2f}。"
+        )
+    if false_up is not None:
+        alerts.append(
+            f"假突破提示：{format_dt(false_up['datetime'])} 盘中过高点但收盘 {float(false_up['close']):.2f} 未站上 {high:.2f}，"
+            "高点压力仍有效，可进入轻仓试空观察。"
+        )
+    elif latest_up_reclaim is not None:
+        alerts.append(
+            f"继续突破提示：{format_dt(latest_up_reclaim['datetime'])} 收盘站上高点 {high:.2f}，"
+            "说明按高点压力做空的判断失效，等待新的支撑/压力。"
+        )
+
+    if first_down_break is not None:
+        alerts.append(
+            f"低点演化：{format_dt(first_down_break['datetime'])} 盘中跌破最大量K线低点 {low:.2f}。"
+        )
+    if false_down is not None:
+        alerts.append(
+            f"跌破收回提示：{format_dt(false_down['datetime'])} 盘中跌破低点但收盘 {float(false_down['close']):.2f} 收回 {low:.2f} 上方，"
+            "低点支撑暂时没有完全失效。"
+        )
+    elif latest_down_accept is not None:
+        alerts.append(
+            f"支撑转压力提示：{format_dt(latest_down_accept['datetime'])} 收盘跌破低点 {low:.2f}，"
+            f"系统把 {low:.2f} 从支撑位改为反抽压力位。"
+        )
+
+    if retest_pressure is not None:
+        alerts.append(
+            f"反抽失败提示：{format_dt(retest_pressure['datetime'])} 反抽触及/越过 {low:.2f} 后收盘仍在其下，"
+            f"说明 {low:.2f} 压力有效，后续可观察轻仓试空条件。"
+        )
+    elif retest_support is not None:
+        alerts.append(
+            f"回踩确认提示：{format_dt(retest_support['datetime'])} 回踩最大量K线高点附近后收盘仍在其上，"
+            f"说明 {high:.2f} 可能从压力转为支撑。"
+        )
+
+    alerts.extend(build_anchor_trade_plan(timeframe, max_volume_row, after, latest))
+    return alerts
+
+
+def build_anchor_trade_plan(
+    timeframe: str,
+    max_volume_row: pd.Series,
+    after: pd.DataFrame,
+    latest: pd.Series,
+) -> list[str]:
+    high = float(max_volume_row["high"])
+    low = float(max_volume_row["low"])
+    latest_close = float(latest["close"])
+    max_after_low = float(after["low"].min()) if not after.empty else float(latest["low"])
+    max_after_high = float(after["high"].max()) if not after.empty else float(latest["high"])
+
+    if latest_close < low:
+        entry = low
+        stop = round_up_to_ten(low) + 1.0
+        target = max_after_low
+        risk = stop - entry
+        reward = entry - target
+        ratio = reward / risk if risk > 0 else 0.0
+        if reward <= 0 or ratio < 3:
+            return [
+                (
+                    f"计划状态：价格已经离开最大量K线低点 {low:.2f} 下方，但从反抽压力 {entry:.2f} 到当前可见低点 {target:.2f} "
+                    f"的空间不足以形成1:3，系统提示等待，不追空。"
+                )
+            ]
+        return [
+            (
+                f"计划提示：若后续反抽 {low:.2f} 附近不能重新站回，按支撑转压力观察；"
+                f"参考止损 {stop:.2f}，目标看后续低点 {target:.2f}，风险利润比约 1:{ratio:.2f}。"
+            )
+        ]
+
+    if latest_close > high:
+        return [
+            (
+                f"计划状态：价格已经站上最大量K线高点 {high:.2f}，原压力失效；"
+                "如果错过突破行情，系统不追多，等待回踩形成新的支撑/压力。"
+            )
+        ]
 
     return [
         (
-            f"日线压力观察：6月1日收阳后行情逐步回落，6月1日高点 {pressure:.2f} 形成压力参考；"
-            f"6月10日盘中最高 {failed_break_high:.2f} 越过6月1日高点，但收盘 {float(day_0610['close']):.2f} "
-            f"回到压力位内，说明 {pressure:.2f}-{failed_break_high:.2f} 压力继续有效。"
-        ),
-        (
-            f"日线计划区间：把 {pressure:.2f}-3200.00 作为轻仓试空观察带，不把 {pressure:.2f} 当作必然成交价；"
-            f"盘中冲高失败可在 {pressure:.2f} 附近试空，收盘后确认失败则等待反抽到该区域再观察。"
-        ),
-        (
-            f"风险收益测算：按 {pressure:.2f} 附近试空、止损 {stop_price:.2f}、目标最大成交量K线低点 {target:.2f} 计算，"
-            f"风险 {risk:.2f} 点，目标空间 {reward:.2f} 点，风险利润比约 1:{ratio:.2f}。"
-        ),
-        (
-            "盘中强弱量化：若价格进入 3189.00-3200.00 后不能连续2根15分钟K线收在3200上方，"
-            "也不能1根小时K线收在3200上方，压力带仍按有效观察；若放量增仓并站上3200，则不做空。"
-        ),
-        (
-            "成交量和持仓量前提：冲击压力带时成交量可以放大，但价格必须收不住3200；"
-            "持仓量增加但价格站不住，属于增仓冲高失败；持仓量减少，则说明上攻缺少新增推动。"
-        ),
-        (
-            f"6月1日至6月10日对比：成交量从 {int(day_0601['volume'])} 增至 {int(day_0610['volume'])}，"
-            f"变化 {volume_change:+.0f}；持仓量从 {int(day_0601['open_interest'])} 变为 {int(day_0610['open_interest'])}，"
-            f"变化 {oi_change:+.0f}，说明6月10日冲高回落时并不是明显增仓上攻。"
-        ),
+            f"计划状态：价格仍在最大量K线区间 {low:.2f}-{high:.2f} 内，"
+            "没有清晰支撑转压力或压力转支撑，系统提示等待。"
+        )
     ]
 
 
-def get_row_by_date(frame: pd.DataFrame, date_text: str) -> pd.Series | None:
-    date = pd.to_datetime(date_text).date()
-    matched = frame[frame["datetime"].dt.date == date]
-    if matched.empty:
+def first_row(frame: pd.DataFrame) -> pd.Series | None:
+    if frame.empty:
         return None
-    return matched.iloc[0]
-
-
-def build_workflow_alerts(timeframe: str, frame: pd.DataFrame) -> list[str]:
-    if timeframe == "日线":
-        return build_daily_pressure_workflow(frame)
-    return build_failed_pressure_workflow(timeframe, frame)
-
-
-def build_daily_pressure_workflow(frame: pd.DataFrame) -> list[str]:
-    day_0601 = get_row_by_date(frame, "2026-06-01")
-    day_0610 = get_row_by_date(frame, "2026-06-10")
-    max_volume_row = frame.loc[frame["volume"].idxmax()]
-    if day_0601 is None or day_0610 is None:
-        return ["日线自动提示：缺少6月1日或6月10日日线数据，压力带工作流暂不触发。"]
-
-    pressure = float(day_0601["high"])
-    failed_break_high = float(day_0610["high"])
-    failed_break_close = float(day_0610["close"])
-    pressure_band_high = 3200.0
-    stop_price = pressure_band_high + 1.0
-    target = float(max_volume_row["low"])
-    risk = stop_price - pressure
-    reward = pressure - target
-    ratio = reward / risk if risk > 0 else 0.0
-    latest = frame.iloc[-1]
-    latest_close = float(latest["close"])
-    latest_high = float(latest["high"])
-    latest_low = float(latest["low"])
-    volume_change = float(day_0610["volume"] - day_0601["volume"])
-    oi_change = float(day_0610["open_interest"] - day_0601["open_interest"])
-
-    alerts = [
-        (
-            f"自动识别压力带：6月1日高点 {pressure:.2f}，6月10日盘中高点 {failed_break_high:.2f}，"
-            f"6月10日收盘 {failed_break_close:.2f} 回到压力内，系统将 {pressure:.2f}-{pressure_band_high:.2f} 标记为日线轻仓试空观察带。"
-        )
-    ]
-
-    if failed_break_high > pressure and failed_break_close <= pressure:
-        alerts.append("触发条件1：盘中过6月1日高点但收盘未站住，压力测试失败成立。")
-    else:
-        alerts.append("未触发条件1：没有形成盘中过前高、收盘回到压力内的失败突破。")
-
-    if ratio >= 3:
-        alerts.append(
-            f"触发条件2：按试空价 {pressure:.2f}、止损 {stop_price:.2f}、目标 {target:.2f} 计算，"
-            f"风险利润比 1:{ratio:.2f}，达到1:3要求。"
-        )
-    else:
-        alerts.append(
-            f"未触发条件2：按试空价 {pressure:.2f}、止损 {stop_price:.2f}、目标 {target:.2f} 计算，"
-            f"风险利润比 1:{ratio:.2f}，未达到1:3要求。"
-        )
-
-    if volume_change > 0 and oi_change <= 0:
-        alerts.append(
-            f"触发条件3：6月10日较6月1日成交量增加 {volume_change:+.0f}，持仓量变化 {oi_change:+.0f}，"
-            "表现为放量但没有增仓上攻，强势上攻证据不足。"
-        )
-    elif volume_change > 0 and oi_change > 0:
-        alerts.append(
-            f"观察条件3：6月10日较6月1日成交量增加 {volume_change:+.0f}，持仓量增加 {oi_change:+.0f}，"
-            "若后续价格站上3200，则不做空。"
-        )
-    else:
-        alerts.append(
-            f"观察条件3：6月10日较6月1日成交量变化 {volume_change:+.0f}，持仓量变化 {oi_change:+.0f}，"
-            "量仓没有显示强势上攻。"
-        )
-
-    if latest_close > pressure_band_high:
-        alerts.append(
-            f"当前状态：最新收盘 {latest_close:.2f} 已在3200上方，日线轻仓试空提示失效，等待重新回到压力带内再评估。"
-        )
-    elif latest_high >= pressure and latest_low <= pressure_band_high:
-        alerts.append(
-            f"当前状态：最新K线波动区间 {latest_low:.2f}-{latest_high:.2f} 触及观察带，盘中需要检查15分钟/小时K线是否站稳3200。"
-        )
-    elif latest_close < target:
-        alerts.append(
-            f"当前状态：最新收盘 {latest_close:.2f} 已低于目标 {target:.2f}，这笔日线压力带计划不再追空，等待新的压力区。"
-        )
-    else:
-        alerts.append(
-            f"当前状态：最新收盘 {latest_close:.2f} 未在 {pressure:.2f}-{pressure_band_high:.2f} 观察带内，系统保持等待反抽提示。"
-        )
-
-    alerts.append(
-        "盘中触发提示：价格进入3189-3200后，若不能连续2根15分钟K线收在3200上方，且不能1根小时K线收在3200上方，提示“压力带仍有效”。"
-    )
-    alerts.append(
-        "盘中失效提示：价格放量增仓并站上3200，提示“不做空，压力带被市场接受”。"
-    )
-    return alerts
-
-
-def build_failed_pressure_workflow(timeframe: str, frame: pd.DataFrame) -> list[str]:
-    candidate = find_latest_failed_pressure_test(frame)
-    if candidate is None:
-        return [
-            f"{timeframe}自动提示：当前数据内没有识别到“盘中突破前高、收盘未站住”的压力测试失败，系统保持观察。"
-        ]
-
-    base_row, test_row = candidate
-    max_volume_row = frame.loc[frame["volume"].idxmax()]
-    pressure = float(base_row["high"])
-    failed_break_high = float(test_row["high"])
-    failed_break_close = float(test_row["close"])
-    pressure_band_high = round_up_to_ten(max(pressure, failed_break_high))
-    stop_price = pressure_band_high + 1.0
-    target = float(max_volume_row["low"])
-    risk = stop_price - pressure
-    reward = pressure - target
-    ratio = reward / risk if risk > 0 else 0.0
-    latest = frame.iloc[-1]
-    latest_close = float(latest["close"])
-    latest_high = float(latest["high"])
-    latest_low = float(latest["low"])
-    volume_change = float(test_row["volume"] - base_row["volume"])
-    oi_change = float(test_row["open_interest"] - base_row["open_interest"])
-
-    alerts = [
-        (
-            f"{timeframe}自动识别压力带：{format_dt(base_row['datetime'])} 高点 {pressure:.2f}，"
-            f"{format_dt(test_row['datetime'])} 盘中高点 {failed_break_high:.2f}，收盘 {failed_break_close:.2f} "
-            f"回到压力内，系统将 {pressure:.2f}-{pressure_band_high:.2f} 标记为{timeframe}轻仓试空观察带。"
-        ),
-        "触发条件1：盘中过前高但收盘未站住，压力测试失败成立。",
-    ]
-
-    if reward > 0 and ratio >= 3:
-        alerts.append(
-            f"触发条件2：按试空价 {pressure:.2f}、止损 {stop_price:.2f}、目标最大成交量K线低点 {target:.2f} 计算，"
-            f"风险利润比 1:{ratio:.2f}，达到1:3要求。"
-        )
-    elif reward <= 0:
-        alerts.append(
-            f"未触发条件2：最大成交量K线低点 {target:.2f} 不在试空价 {pressure:.2f} 下方，"
-            "这套压力带计划没有向下目标空间。"
-        )
-    else:
-        alerts.append(
-            f"未触发条件2：按试空价 {pressure:.2f}、止损 {stop_price:.2f}、目标 {target:.2f} 计算，"
-            f"风险利润比 1:{ratio:.2f}，未达到1:3要求。"
-        )
-
-    if volume_change > 0 and oi_change <= 0:
-        alerts.append(
-            f"触发条件3：测试K线较压力K线成交量增加 {volume_change:+.0f}，持仓量变化 {oi_change:+.0f}，"
-            "表现为放量但没有增仓上攻，强势上攻证据不足。"
-        )
-    elif volume_change > 0 and oi_change > 0:
-        alerts.append(
-            f"观察条件3：测试K线较压力K线成交量增加 {volume_change:+.0f}，持仓量增加 {oi_change:+.0f}，"
-            f"若后续价格站上 {pressure_band_high:.2f}，则不做空。"
-        )
-    else:
-        alerts.append(
-            f"观察条件3：测试K线较压力K线成交量变化 {volume_change:+.0f}，持仓量变化 {oi_change:+.0f}，"
-            "量仓没有显示强势上攻。"
-        )
-
-    if latest_close > pressure_band_high:
-        alerts.append(
-            f"当前状态：最新收盘 {latest_close:.2f} 已在 {pressure_band_high:.2f} 上方，"
-            f"{timeframe}轻仓试空提示失效，等待重新回到压力带内再评估。"
-        )
-    elif latest_high >= pressure and latest_low <= pressure_band_high:
-        alerts.append(
-            f"当前状态：最新K线波动区间 {latest_low:.2f}-{latest_high:.2f} 触及观察带，"
-            f"需要检查低一级周期K线是否站稳 {pressure_band_high:.2f}。"
-        )
-    elif reward > 0 and latest_close < target:
-        alerts.append(
-            f"当前状态：最新收盘 {latest_close:.2f} 已低于目标 {target:.2f}，"
-            f"这笔{timeframe}压力带计划不再追空，等待新的压力区。"
-        )
-    else:
-        alerts.append(
-            f"当前状态：最新收盘 {latest_close:.2f} 未在 {pressure:.2f}-{pressure_band_high:.2f} 观察带内，"
-            "系统保持等待反抽提示。"
-        )
-
-    alerts.append(
-        f"触发提示：价格进入 {pressure:.2f}-{pressure_band_high:.2f} 后，若收盘不能站上 {pressure_band_high:.2f}，提示“压力带仍有效”。"
-    )
-    alerts.append(
-        f"失效提示：价格放量增仓并收在 {pressure_band_high:.2f} 上方，提示“不做空，压力带被市场接受”。"
-    )
-    return alerts
-
-
-def find_latest_failed_pressure_test(frame: pd.DataFrame) -> tuple[pd.Series, pd.Series] | None:
-    candidates: list[tuple[pd.Series, pd.Series]] = []
-    rows = list(frame.iterrows())
-    for idx in range(1, len(rows)):
-        _, base_row = rows[idx - 1]
-        _, test_row = rows[idx]
-        base_high = float(base_row["high"])
-        if float(test_row["high"]) > base_high and float(test_row["close"]) <= base_high:
-            candidates.append((base_row, test_row))
-    if not candidates:
-        return None
-    return candidates[-1]
-
+    return frame.iloc[0]
 
 def round_up_to_ten(value: float) -> float:
     return float(int((value + 9) // 10 * 10))
