@@ -123,6 +123,8 @@
     .price-marker { fill: #f2c94c; stroke: #0b1118; stroke-width: 2; }
     .price-label, .max-volume-label { fill: #e6edf3; font-size: 12px; font-weight: 600; }
     .max-volume-line { stroke: #f2c94c; stroke-width: 1.4; stroke-dasharray: 6 4; opacity: 0.88; }
+    .candidate-line { stroke: #4cc9f0; stroke-width: 1.4; stroke-dasharray: 4 4; opacity: 0.92; }
+    .candidate-label { fill: #4cc9f0; font-size: 12px; font-weight: 700; }
     .kline line, .kline polyline, .kline text, .kline circle, .kline rect:not(.candle-hit) { pointer-events: none; }
     .candle-hit { fill: transparent; cursor: pointer; pointer-events: all; }
     .candle-hit:hover { fill: rgba(242, 201, 76, 0.08); }
@@ -185,7 +187,7 @@
             <div class="kline-detail" id="detail-RB0-日线">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
           </div>
           <aside class="info-pane">
-            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">锚点区间拉锯</span><span class="tag">接近观察位</span></div>
+            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">锚点区间拉锯</span><span class="tag">接近观察位</span><span class="tag">原锚点有效</span></div>
             
       <section class="line-item">
         <b>1. 当前状态</b>
@@ -195,13 +197,13 @@
             
       <section class="line-item">
         <b>2. 当前观察位</b>
-        <p>压力 3138.00，距最新收盘 1.45%；支撑 3080.00，距最新收盘 0.42%。最大量K线 2026-05-26 00:00，区间 3138.00-3218.00。</p>
+        <p>压力 3138.00，距最新收盘 1.45%；支撑 3080.00，距最新收盘 0.42%。最大量K线 2026-05-26 00:00，区间 3138.00-3218.00。当前仍以原最大成交量K线作为观察锚点。</p>
       </section>
     
             
       <section class="line-item">
         <b>3. 等待原因</b>
-        <p>价格已接近观察位，但仍需等待该位置的收盘确认，以及成交量和持仓量是否支持。</p>
+        <p>价格已接近观察位，但仍需等待该位置的收盘确认，以及成交量和持仓量是否支持。锚点提示：原锚点仍有效，继续观察其高低点的支撑压力转换。</p>
       </section>
     
             
@@ -232,7 +234,7 @@
             <div class="kline-detail" id="detail-V0-日线">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
           </div>
           <aside class="info-pane">
-            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">接近观察位</span></div>
+            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">接近观察位</span><span class="tag">原锚点有效</span></div>
             
       <section class="line-item">
         <b>1. 当前状态</b>
@@ -242,13 +244,13 @@
             
       <section class="line-item">
         <b>2. 当前观察位</b>
-        <p>压力 5006.00，距最新收盘 14.08%；支撑 4385.00，距最新收盘 0.07%。最大量K线 2026-05-14 00:00，区间 5054.00-5257.00。</p>
+        <p>压力 5006.00，距最新收盘 14.08%；支撑 4385.00，距最新收盘 0.07%。最大量K线 2026-05-14 00:00，区间 5054.00-5257.00。当前仍以原最大成交量K线作为观察锚点。</p>
       </section>
     
             
       <section class="line-item">
         <b>3. 等待原因</b>
-        <p>价格距离压力观察位 14.08%，位置偏远，等待反抽靠近压力位。</p>
+        <p>价格距离压力观察位 14.08%，位置偏远，等待反抽靠近压力位。锚点提示：原锚点仍有效，继续观察其高低点的支撑压力转换。</p>
       </section>
     
             
@@ -276,11 +278,11 @@
         </div>
         <div class="period-layout">
           <div class="chart-pane">
-            <svg viewBox="0 0 1200 560" class="kline" role="img"><line x1="54" y1="24" x2="54" y2="324" class="axis"/><line x1="54" y1="324" x2="1184" y2="324" class="axis"/><text x="8" y="28" class="axis-label">3298.00</text><text x="8" y="324" class="axis-label">3080.00</text><line x1="54" y1="106.6" x2="1184" y2="106.6" class="max-volume-line"/><line x1="54" y1="246.9" x2="1184" y2="246.9" class="max-volume-line"/><text x="994" y="100.6" class="max-volume-label">最大量高 3238.00</text><text x="994" y="262.9" class="max-volume-label">最大量低 3136.00</text><text x="8" y="402" class="axis-label">成交量/持仓量</text><line x1="54" y1="500" x2="1184" y2="500" class="axis"/><line x1="116.8" y1="131.3" x2="116.8" y2="211.2" class="up wick"/><rect x="110.8" y="139.6" width="12.0" height="31.7" class="up body"/><rect x="110.8" y="434.8" width="12.0" height="65.2" class="volume-bar"/><rect x="54.0" y="24" width="125.6" height="476" class="candle-hit" data-chart="RB0-周线" data-time="2026-05-01 00:00" data-open="3191.00" data-high="3220.00" data-low="3162.00" data-close="3214.00" data-volume="2642107" data-open-interest="1885016"><title>2026-05-01 00:00 开 3191.00 高 3220.00 低 3162.00 收 3214.00 量 2642107 持仓 1885016</title></rect><text x="116.8" y="544" class="date-label">05-01</text><line x1="242.3" y1="41.9" x2="242.3" y2="132.7" class="up wick"/><rect x="236.3" y="72.2" width="12.0" height="49.5" class="up body"/><rect x="236.3" y="441.5" width="12.0" height="58.5" class="volume-bar"/><rect x="179.6" y="24" width="125.6" height="476" class="candle-hit" data-chart="RB0-周线" data-time="2026-05-08 00:00" data-open="3227.00" data-high="3285.00" data-low="3219.00" data-close="3263.00" data-volume="2372973" data-open-interest="2144541"><title>2026-05-08 00:00 开 3227.00 高 3285.00 低 3219.00 收 3263.00 量 2372973 持仓 2144541</title></rect><text x="242.3" y="544" class="date-label">05-08</text><line x1="367.9" y1="24.0" x2="367.9" y2="123.1" class="down wick"/><rect x="361.9" y="73.5" width="12.0" height="41.3" class="down body"/><rect x="361.9" y="392.3" width="12.0" height="107.7" class="volume-bar"/><rect x="305.1" y="24" width="125.6" height="476" class="candle-hit" data-chart="RB0-周线" data-time="2026-05-15 00:00" data-open="3262.00" data-high="3298.00" data-low="3226.00" data-close="3232.00" data-volume="4365620" data-open-interest="2021601"><title>2026-05-15 00:00 开 3262.00 高 3298.00 低 3226.00 收 3232.00 量 4365620 持仓 2021601</title></rect><text x="367.9" y="544" class="date-label">05-15</text><line x1="493.4" y1="107.9" x2="493.4" y2="209.8" class="down wick"/><rect x="487.4" y="114.8" width="12.0" height="88.1" class="down body"/><rect x="487.4" y="414.2" width="12.0" height="85.8" class="volume-bar"/><rect x="430.7" y="24" width="125.6" height="476" class="candle-hit" data-chart="RB0-周线" data-time="2026-05-22 00:00" data-open="3232.00" data-high="3237.00" data-low="3163.00" data-close="3168.00" data-volume="3479791" data-open-interest="1804080"><title>2026-05-22 00:00 开 3232.00 高 3237.00 低 3163.00 收 3168.00 量 3479791 持仓 1804080</title></rect><text x="493.4" y="544" class="date-label">05-22</text><line x1="619.0" y1="106.6" x2="619.0" y2="246.9" class="down wick"/><rect x="613.0" y="202.9" width="12.0" height="13.8" class="down body"/><rect x="613.0" y="390.0" width="12.0" height="110.0" class="volume-bar"/><rect x="556.2" y="24" width="125.6" height="476" class="candle-hit" data-chart="RB0-周线" data-time="2026-05-29 00:00" data-open="3168.00" data-high="3238.00" data-low="3136.00" data-close="3158.00" data-volume="4458859" data-open-interest="1728672"><title>2026-05-29 00:00 开 3168.00 高 3238.00 低 3136.00 收 3158.00 量 4458859 持仓 1728672</title></rect><text x="619.0" y="544" class="date-label">05-29</text><line x1="744.6" y1="174.0" x2="744.6" y2="229.0" class="up wick"/><rect x="738.6" y="207.0" width="12.0" height="12.4" class="up body"/><rect x="738.6" y="427.4" width="12.0" height="72.6" class="volume-bar"/><rect x="681.8" y="24" width="125.6" height="476" class="candle-hit" data-chart="RB0-周线" data-time="2026-06-05 00:00" data-open="3156.00" data-high="3189.00" data-low="3149.00" data-close="3165.00" data-volume="2941409" data-open-interest="1722884"><title>2026-06-05 00:00 开 3156.00 高 3189.00 低 3149.00 收 3165.00 量 2941409 持仓 1722884</title></rect><text x="744.6" y="544" class="date-label">06-05</text><line x1="870.1" y1="167.1" x2="870.1" y2="238.7" class="up wick"/><rect x="864.1" y="189.1" width="12.0" height="17.9" class="up body"/><rect x="864.1" y="413.5" width="12.0" height="86.5" class="volume-bar"/><rect x="807.3" y="24" width="125.6" height="476" class="candle-hit" data-chart="RB0-周线" data-time="2026-06-12 00:00" data-open="3165.00" data-high="3194.00" data-low="3142.00" data-close="3178.00" data-volume="3506855" data-open-interest="1642243"><title>2026-06-12 00:00 开 3165.00 高 3194.00 低 3142.00 收 3178.00 量 3506855 持仓 1642243</title></rect><text x="870.1" y="544" class="date-label">06-12</text><line x1="995.7" y1="165.7" x2="995.7" y2="266.2" class="down wick"/><rect x="989.7" y="186.4" width="12.0" height="67.4" class="down body"/><rect x="989.7" y="429.6" width="12.0" height="70.4" class="volume-bar"/><rect x="932.9" y="24" width="125.6" height="476" class="candle-hit" data-chart="RB0-周线" data-time="2026-06-19 00:00" data-open="3180.00" data-high="3195.00" data-low="3122.00" data-close="3131.00" data-volume="2852753" data-open-interest="1713730"><title>2026-06-19 00:00 开 3180.00 高 3195.00 低 3122.00 收 3131.00 量 2852753 持仓 1713730</title></rect><text x="995.7" y="544" class="date-label">06-19</text><line x1="1121.2" y1="251.1" x2="1121.2" y2="324.0" class="down wick"/><rect x="1115.2" y="253.8" width="12.0" height="52.3" class="down body"/><rect x="1115.2" y="427.8" width="12.0" height="72.2" class="volume-bar"/><rect x="1058.4" y="24" width="125.6" height="476" class="candle-hit" data-chart="RB0-周线" data-time="2026-06-26 00:00" data-open="3131.00" data-high="3133.00" data-low="3080.00" data-close="3093.00" data-volume="2926555" data-open-interest="1901198"><title>2026-06-26 00:00 开 3131.00 高 3133.00 低 3080.00 收 3093.00 量 2926555 持仓 1901198</title></rect><text x="1121.2" y="544" class="date-label">06-26</text><circle cx="367.9" cy="24.0" r="4" class="price-marker"/><text x="375.9" y="16.0" class="price-label">高 3298.00</text><circle cx="1121.2" cy="324.0" r="4" class="price-marker"/><text x="1129.2" y="342.0" class="price-label">低 3080.00</text><polyline points="116.8,446.8 242.3,390.0 367.9,416.9 493.4,464.6 619.0,481.1 744.6,482.3 870.1,500.0 995.7,484.3 1121.2,443.3" fill="none" class="oi-line"/></svg>
+            <svg viewBox="0 0 1200 560" class="kline" role="img"><line x1="54" y1="24" x2="54" y2="324" class="axis"/><line x1="54" y1="324" x2="1184" y2="324" class="axis"/><text x="8" y="28" class="axis-label">3298.00</text><text x="8" y="324" class="axis-label">3080.00</text><line x1="54" y1="106.6" x2="1184" y2="106.6" class="max-volume-line"/><line x1="54" y1="246.9" x2="1184" y2="246.9" class="max-volume-line"/><text x="994" y="100.6" class="max-volume-label">最大量高 3238.00</text><text x="994" y="262.9" class="max-volume-label">最大量低 3136.00</text><text x="8" y="402" class="axis-label">成交量/持仓量</text><line x1="54" y1="500" x2="1184" y2="500" class="axis"/><line x1="54" y1="167.1" x2="1184" y2="167.1" class="candidate-line"/><line x1="54" y1="238.7" x2="1184" y2="238.7" class="candidate-line"/><text x="994" y="161.1" class="candidate-label">候选高 3194.00</text><text x="994" y="254.7" class="candidate-label">候选低 3142.00</text><line x1="116.8" y1="131.3" x2="116.8" y2="211.2" class="up wick"/><rect x="110.8" y="139.6" width="12.0" height="31.7" class="up body"/><rect x="110.8" y="434.8" width="12.0" height="65.2" class="volume-bar"/><rect x="54.0" y="24" width="125.6" height="476" class="candle-hit" data-chart="RB0-周线" data-time="2026-05-01 00:00" data-open="3191.00" data-high="3220.00" data-low="3162.00" data-close="3214.00" data-volume="2642107" data-open-interest="1885016"><title>2026-05-01 00:00 开 3191.00 高 3220.00 低 3162.00 收 3214.00 量 2642107 持仓 1885016</title></rect><text x="116.8" y="544" class="date-label">05-01</text><line x1="242.3" y1="41.9" x2="242.3" y2="132.7" class="up wick"/><rect x="236.3" y="72.2" width="12.0" height="49.5" class="up body"/><rect x="236.3" y="441.5" width="12.0" height="58.5" class="volume-bar"/><rect x="179.6" y="24" width="125.6" height="476" class="candle-hit" data-chart="RB0-周线" data-time="2026-05-08 00:00" data-open="3227.00" data-high="3285.00" data-low="3219.00" data-close="3263.00" data-volume="2372973" data-open-interest="2144541"><title>2026-05-08 00:00 开 3227.00 高 3285.00 低 3219.00 收 3263.00 量 2372973 持仓 2144541</title></rect><text x="242.3" y="544" class="date-label">05-08</text><line x1="367.9" y1="24.0" x2="367.9" y2="123.1" class="down wick"/><rect x="361.9" y="73.5" width="12.0" height="41.3" class="down body"/><rect x="361.9" y="392.3" width="12.0" height="107.7" class="volume-bar"/><rect x="305.1" y="24" width="125.6" height="476" class="candle-hit" data-chart="RB0-周线" data-time="2026-05-15 00:00" data-open="3262.00" data-high="3298.00" data-low="3226.00" data-close="3232.00" data-volume="4365620" data-open-interest="2021601"><title>2026-05-15 00:00 开 3262.00 高 3298.00 低 3226.00 收 3232.00 量 4365620 持仓 2021601</title></rect><text x="367.9" y="544" class="date-label">05-15</text><line x1="493.4" y1="107.9" x2="493.4" y2="209.8" class="down wick"/><rect x="487.4" y="114.8" width="12.0" height="88.1" class="down body"/><rect x="487.4" y="414.2" width="12.0" height="85.8" class="volume-bar"/><rect x="430.7" y="24" width="125.6" height="476" class="candle-hit" data-chart="RB0-周线" data-time="2026-05-22 00:00" data-open="3232.00" data-high="3237.00" data-low="3163.00" data-close="3168.00" data-volume="3479791" data-open-interest="1804080"><title>2026-05-22 00:00 开 3232.00 高 3237.00 低 3163.00 收 3168.00 量 3479791 持仓 1804080</title></rect><text x="493.4" y="544" class="date-label">05-22</text><line x1="619.0" y1="106.6" x2="619.0" y2="246.9" class="down wick"/><rect x="613.0" y="202.9" width="12.0" height="13.8" class="down body"/><rect x="613.0" y="390.0" width="12.0" height="110.0" class="volume-bar"/><rect x="556.2" y="24" width="125.6" height="476" class="candle-hit" data-chart="RB0-周线" data-time="2026-05-29 00:00" data-open="3168.00" data-high="3238.00" data-low="3136.00" data-close="3158.00" data-volume="4458859" data-open-interest="1728672"><title>2026-05-29 00:00 开 3168.00 高 3238.00 低 3136.00 收 3158.00 量 4458859 持仓 1728672</title></rect><text x="619.0" y="544" class="date-label">05-29</text><line x1="744.6" y1="174.0" x2="744.6" y2="229.0" class="up wick"/><rect x="738.6" y="207.0" width="12.0" height="12.4" class="up body"/><rect x="738.6" y="427.4" width="12.0" height="72.6" class="volume-bar"/><rect x="681.8" y="24" width="125.6" height="476" class="candle-hit" data-chart="RB0-周线" data-time="2026-06-05 00:00" data-open="3156.00" data-high="3189.00" data-low="3149.00" data-close="3165.00" data-volume="2941409" data-open-interest="1722884"><title>2026-06-05 00:00 开 3156.00 高 3189.00 低 3149.00 收 3165.00 量 2941409 持仓 1722884</title></rect><text x="744.6" y="544" class="date-label">06-05</text><line x1="870.1" y1="167.1" x2="870.1" y2="238.7" class="up wick"/><rect x="864.1" y="189.1" width="12.0" height="17.9" class="up body"/><rect x="864.1" y="413.5" width="12.0" height="86.5" class="volume-bar"/><rect x="807.3" y="24" width="125.6" height="476" class="candle-hit" data-chart="RB0-周线" data-time="2026-06-12 00:00" data-open="3165.00" data-high="3194.00" data-low="3142.00" data-close="3178.00" data-volume="3506855" data-open-interest="1642243"><title>2026-06-12 00:00 开 3165.00 高 3194.00 低 3142.00 收 3178.00 量 3506855 持仓 1642243</title></rect><text x="870.1" y="544" class="date-label">06-12</text><line x1="995.7" y1="165.7" x2="995.7" y2="266.2" class="down wick"/><rect x="989.7" y="186.4" width="12.0" height="67.4" class="down body"/><rect x="989.7" y="429.6" width="12.0" height="70.4" class="volume-bar"/><rect x="932.9" y="24" width="125.6" height="476" class="candle-hit" data-chart="RB0-周线" data-time="2026-06-19 00:00" data-open="3180.00" data-high="3195.00" data-low="3122.00" data-close="3131.00" data-volume="2852753" data-open-interest="1713730"><title>2026-06-19 00:00 开 3180.00 高 3195.00 低 3122.00 收 3131.00 量 2852753 持仓 1713730</title></rect><text x="995.7" y="544" class="date-label">06-19</text><line x1="1121.2" y1="251.1" x2="1121.2" y2="324.0" class="down wick"/><rect x="1115.2" y="253.8" width="12.0" height="52.3" class="down body"/><rect x="1115.2" y="427.8" width="12.0" height="72.2" class="volume-bar"/><rect x="1058.4" y="24" width="125.6" height="476" class="candle-hit" data-chart="RB0-周线" data-time="2026-06-26 00:00" data-open="3131.00" data-high="3133.00" data-low="3080.00" data-close="3093.00" data-volume="2926555" data-open-interest="1901198"><title>2026-06-26 00:00 开 3131.00 高 3133.00 低 3080.00 收 3093.00 量 2926555 持仓 1901198</title></rect><text x="1121.2" y="544" class="date-label">06-26</text><circle cx="367.9" cy="24.0" r="4" class="price-marker"/><text x="375.9" y="16.0" class="price-label">高 3298.00</text><circle cx="1121.2" cy="324.0" r="4" class="price-marker"/><text x="1129.2" y="342.0" class="price-label">低 3080.00</text><polyline points="116.8,446.8 242.3,390.0 367.9,416.9 493.4,464.6 619.0,481.1 744.6,482.3 870.1,500.0 995.7,484.3 1121.2,443.3" fill="none" class="oi-line"/></svg>
             <div class="kline-detail" id="detail-RB0-周线">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
           </div>
           <aside class="info-pane">
-            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">锚点区间拉锯</span><span class="tag">接近观察位</span></div>
+            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">锚点区间拉锯</span><span class="tag">接近观察位</span><span class="tag">候选新锚点</span></div>
             
       <section class="line-item">
         <b>1. 当前状态</b>
@@ -290,13 +292,13 @@
             
       <section class="line-item">
         <b>2. 当前观察位</b>
-        <p>压力 3136.00，距最新收盘 1.39%；支撑 3080.00，距最新收盘 0.42%。最大量K线 2026-05-29 00:00，区间 3136.00-3238.00。</p>
+        <p>压力 3136.00，距最新收盘 1.39%；支撑 3080.00，距最新收盘 0.42%。最大量K线 2026-05-29 00:00，区间 3136.00-3238.00。候选新锚点 2026-06-12 00:00，成交量为原锚点的 78.6%，区间 3142.00-3194.00。</p>
       </section>
     
             
       <section class="line-item">
         <b>3. 等待原因</b>
-        <p>价格已接近观察位，但仍需等待该位置的收盘确认，以及成交量和持仓量是否支持。</p>
+        <p>价格已接近观察位，但仍需等待该位置的收盘确认，以及成交量和持仓量是否支持。锚点提示：后续观察价格是否继续围绕候选新锚点高低点波动，确认后再替换原锚点。</p>
       </section>
     
             
@@ -308,7 +310,7 @@
             
       <section class="line-item">
         <b>5. 失效条件</b>
-        <p>若后续收盘重新站回压力位 3136.00 上方，并且成交量、持仓量支持上攻，空方观察失效，等待新锚点。</p>
+        <p>若后续价格不再围绕候选新锚点 2026-06-12 00:00 的高低点波动，候选锚点失效，继续使用原锚点或等待新锚点。</p>
       </section>
     
           </aside>
@@ -323,11 +325,11 @@
         </div>
         <div class="period-layout">
           <div class="chart-pane">
-            <svg viewBox="0 0 1200 560" class="kline" role="img"><line x1="54" y1="24" x2="54" y2="324" class="axis"/><line x1="54" y1="324" x2="1184" y2="324" class="axis"/><text x="8" y="28" class="axis-label">5371.00</text><text x="8" y="324" class="axis-label">4385.00</text><line x1="54" y1="58.7" x2="1184" y2="58.7" class="max-volume-line"/><line x1="54" y1="129.6" x2="1184" y2="129.6" class="max-volume-line"/><text x="994" y="52.7" class="max-volume-label">最大量高 5257.00</text><text x="994" y="145.6" class="max-volume-label">最大量低 5024.00</text><text x="8" y="402" class="axis-label">成交量/持仓量</text><line x1="54" y1="500" x2="1184" y2="500" class="axis"/><line x1="116.8" y1="24.0" x2="116.8" y2="97.3" class="up wick"/><rect x="110.8" y="54.1" width="12.0" height="40.2" class="up body"/><rect x="110.8" y="407.9" width="12.0" height="92.1" class="volume-bar"/><rect x="54.0" y="24" width="125.6" height="476" class="candle-hit" data-chart="V0-周线" data-time="2026-05-01 00:00" data-open="5140.00" data-high="5371.00" data-low="5130.00" data-close="5272.00" data-volume="4604019" data-open-interest="913066"><title>2026-05-01 00:00 开 5140.00 高 5371.00 低 5130.00 收 5272.00 量 4604019 持仓 913066</title></rect><text x="116.8" y="544" class="date-label">05-01</text><line x1="242.3" y1="33.1" x2="242.3" y2="100.4" class="down wick"/><rect x="236.3" y="57.8" width="12.0" height="35.0" class="down body"/><rect x="236.3" y="439.9" width="12.0" height="60.1" class="volume-bar"/><rect x="179.6" y="24" width="125.6" height="476" class="candle-hit" data-chart="V0-周线" data-time="2026-05-08 00:00" data-open="5260.00" data-high="5341.00" data-low="5120.00" data-close="5145.00" data-volume="3005047" data-open-interest="978916"><title>2026-05-08 00:00 开 5260.00 高 5341.00 低 5120.00 收 5145.00 量 3005047 持仓 978916</title></rect><text x="242.3" y="544" class="date-label">05-08</text><line x1="367.9" y1="58.7" x2="367.9" y2="129.6" class="down wick"/><rect x="361.9" y="92.8" width="12.0" height="35.9" class="down body"/><rect x="361.9" y="390.0" width="12.0" height="110.0" class="volume-bar"/><rect x="305.1" y="24" width="125.6" height="476" class="candle-hit" data-chart="V0-周线" data-time="2026-05-15 00:00" data-open="5145.00" data-high="5257.00" data-low="5024.00" data-close="5027.00" data-volume="5500592" data-open-interest="1040706"><title>2026-05-15 00:00 开 5145.00 高 5257.00 低 5024.00 收 5027.00 量 5500592 持仓 1040706</title></rect><text x="367.9" y="544" class="date-label">05-15</text><line x1="493.4" y1="93.1" x2="493.4" y2="196.5" class="down wick"/><rect x="487.4" y="127.8" width="12.0" height="56.0" class="down body"/><rect x="487.4" y="393.0" width="12.0" height="107.0" class="volume-bar"/><rect x="430.7" y="24" width="125.6" height="476" class="candle-hit" data-chart="V0-周线" data-time="2026-05-22 00:00" data-open="5030.00" data-high="5144.00" data-low="4804.00" data-close="4846.00" data-volume="5348222" data-open-interest="1114102"><title>2026-05-22 00:00 开 5030.00 高 5144.00 低 4804.00 收 4846.00 量 5348222 持仓 1114102</title></rect><text x="493.4" y="544" class="date-label">05-22</text><line x1="619.0" y1="138.7" x2="619.0" y2="189.8" class="up wick"/><rect x="613.0" y="160.0" width="12.0" height="28.6" class="up body"/><rect x="613.0" y="402.2" width="12.0" height="97.8" class="volume-bar"/><rect x="556.2" y="24" width="125.6" height="476" class="candle-hit" data-chart="V0-周线" data-time="2026-05-29 00:00" data-open="4830.00" data-high="4994.00" data-low="4826.00" data-close="4924.00" data-volume="4892663" data-open-interest="1057944"><title>2026-05-29 00:00 开 4830.00 高 4994.00 低 4826.00 收 4924.00 量 4892663 持仓 1057944</title></rect><text x="619.0" y="544" class="date-label">05-29</text><line x1="744.6" y1="127.1" x2="744.6" y2="211.7" class="down wick"/><rect x="738.6" y="164.0" width="12.0" height="43.8" class="down body"/><rect x="738.6" y="393.1" width="12.0" height="106.9" class="volume-bar"/><rect x="681.8" y="24" width="125.6" height="476" class="candle-hit" data-chart="V0-周线" data-time="2026-06-05 00:00" data-open="4911.00" data-high="5032.00" data-low="4754.00" data-close="4767.00" data-volume="5345820" data-open-interest="1161300"><title>2026-06-05 00:00 开 4911.00 高 5032.00 低 4754.00 收 4767.00 量 5345820 持仓 1161300</title></rect><text x="744.6" y="544" class="date-label">06-05</text><line x1="870.1" y1="197.1" x2="870.1" y2="245.2" class="down wick"/><rect x="864.1" y="207.2" width="12.0" height="8.5" class="down body"/><rect x="864.1" y="402.9" width="12.0" height="97.1" class="volume-bar"/><rect x="807.3" y="24" width="125.6" height="476" class="candle-hit" data-chart="V0-周线" data-time="2026-06-12 00:00" data-open="4769.00" data-high="4802.00" data-low="4644.00" data-close="4741.00" data-volume="4853700" data-open-interest="1197273"><title>2026-06-12 00:00 开 4769.00 高 4802.00 低 4644.00 收 4741.00 量 4853700 持仓 1197273</title></rect><text x="870.1" y="544" class="date-label">06-12</text><line x1="995.7" y1="202.6" x2="995.7" y2="264.7" class="down wick"/><rect x="989.7" y="216.6" width="12.0" height="37.1" class="down body"/><rect x="989.7" y="418.8" width="12.0" height="81.2" class="volume-bar"/><rect x="932.9" y="24" width="125.6" height="476" class="candle-hit" data-chart="V0-周线" data-time="2026-06-19 00:00" data-open="4738.00" data-high="4784.00" data-low="4580.00" data-close="4616.00" data-volume="4061649" data-open-interest="1256297"><title>2026-06-19 00:00 开 4738.00 高 4784.00 低 4580.00 收 4616.00 量 4061649 持仓 1256297</title></rect><text x="995.7" y="544" class="date-label">06-19</text><line x1="1121.2" y1="241.2" x2="1121.2" y2="324.0" class="down wick"/><rect x="1115.2" y="251.0" width="12.0" height="72.1" class="down body"/><rect x="1115.2" y="401.2" width="12.0" height="98.8" class="volume-bar"/><rect x="1058.4" y="24" width="125.6" height="476" class="candle-hit" data-chart="V0-周线" data-time="2026-06-26 00:00" data-open="4625.00" data-high="4657.00" data-low="4385.00" data-close="4388.00" data-volume="4941287" data-open-interest="1421719"><title>2026-06-26 00:00 开 4625.00 高 4657.00 低 4385.00 收 4388.00 量 4941287 持仓 1421719</title></rect><text x="1121.2" y="544" class="date-label">06-26</text><circle cx="116.8" cy="24.0" r="4" class="price-marker"/><text x="124.8" y="16.0" class="price-label">高 5371.00</text><circle cx="1121.2" cy="324.0" r="4" class="price-marker"/><text x="1129.2" y="342.0" class="price-label">低 4385.00</text><polyline points="116.8,500.0 242.3,485.8 367.9,472.4 493.4,456.5 619.0,468.7 744.6,446.3 870.1,438.5 995.7,425.8 1121.2,390.0" fill="none" class="oi-line"/></svg>
+            <svg viewBox="0 0 1200 560" class="kline" role="img"><line x1="54" y1="24" x2="54" y2="324" class="axis"/><line x1="54" y1="324" x2="1184" y2="324" class="axis"/><text x="8" y="28" class="axis-label">5371.00</text><text x="8" y="324" class="axis-label">4385.00</text><line x1="54" y1="58.7" x2="1184" y2="58.7" class="max-volume-line"/><line x1="54" y1="129.6" x2="1184" y2="129.6" class="max-volume-line"/><text x="994" y="52.7" class="max-volume-label">最大量高 5257.00</text><text x="994" y="145.6" class="max-volume-label">最大量低 5024.00</text><text x="8" y="402" class="axis-label">成交量/持仓量</text><line x1="54" y1="500" x2="1184" y2="500" class="axis"/><line x1="54" y1="93.1" x2="1184" y2="93.1" class="candidate-line"/><line x1="54" y1="196.5" x2="1184" y2="196.5" class="candidate-line"/><text x="994" y="87.1" class="candidate-label">候选高 5144.00</text><text x="994" y="212.5" class="candidate-label">候选低 4804.00</text><line x1="116.8" y1="24.0" x2="116.8" y2="97.3" class="up wick"/><rect x="110.8" y="54.1" width="12.0" height="40.2" class="up body"/><rect x="110.8" y="407.9" width="12.0" height="92.1" class="volume-bar"/><rect x="54.0" y="24" width="125.6" height="476" class="candle-hit" data-chart="V0-周线" data-time="2026-05-01 00:00" data-open="5140.00" data-high="5371.00" data-low="5130.00" data-close="5272.00" data-volume="4604019" data-open-interest="913066"><title>2026-05-01 00:00 开 5140.00 高 5371.00 低 5130.00 收 5272.00 量 4604019 持仓 913066</title></rect><text x="116.8" y="544" class="date-label">05-01</text><line x1="242.3" y1="33.1" x2="242.3" y2="100.4" class="down wick"/><rect x="236.3" y="57.8" width="12.0" height="35.0" class="down body"/><rect x="236.3" y="439.9" width="12.0" height="60.1" class="volume-bar"/><rect x="179.6" y="24" width="125.6" height="476" class="candle-hit" data-chart="V0-周线" data-time="2026-05-08 00:00" data-open="5260.00" data-high="5341.00" data-low="5120.00" data-close="5145.00" data-volume="3005047" data-open-interest="978916"><title>2026-05-08 00:00 开 5260.00 高 5341.00 低 5120.00 收 5145.00 量 3005047 持仓 978916</title></rect><text x="242.3" y="544" class="date-label">05-08</text><line x1="367.9" y1="58.7" x2="367.9" y2="129.6" class="down wick"/><rect x="361.9" y="92.8" width="12.0" height="35.9" class="down body"/><rect x="361.9" y="390.0" width="12.0" height="110.0" class="volume-bar"/><rect x="305.1" y="24" width="125.6" height="476" class="candle-hit" data-chart="V0-周线" data-time="2026-05-15 00:00" data-open="5145.00" data-high="5257.00" data-low="5024.00" data-close="5027.00" data-volume="5500592" data-open-interest="1040706"><title>2026-05-15 00:00 开 5145.00 高 5257.00 低 5024.00 收 5027.00 量 5500592 持仓 1040706</title></rect><text x="367.9" y="544" class="date-label">05-15</text><line x1="493.4" y1="93.1" x2="493.4" y2="196.5" class="down wick"/><rect x="487.4" y="127.8" width="12.0" height="56.0" class="down body"/><rect x="487.4" y="393.0" width="12.0" height="107.0" class="volume-bar"/><rect x="430.7" y="24" width="125.6" height="476" class="candle-hit" data-chart="V0-周线" data-time="2026-05-22 00:00" data-open="5030.00" data-high="5144.00" data-low="4804.00" data-close="4846.00" data-volume="5348222" data-open-interest="1114102"><title>2026-05-22 00:00 开 5030.00 高 5144.00 低 4804.00 收 4846.00 量 5348222 持仓 1114102</title></rect><text x="493.4" y="544" class="date-label">05-22</text><line x1="619.0" y1="138.7" x2="619.0" y2="189.8" class="up wick"/><rect x="613.0" y="160.0" width="12.0" height="28.6" class="up body"/><rect x="613.0" y="402.2" width="12.0" height="97.8" class="volume-bar"/><rect x="556.2" y="24" width="125.6" height="476" class="candle-hit" data-chart="V0-周线" data-time="2026-05-29 00:00" data-open="4830.00" data-high="4994.00" data-low="4826.00" data-close="4924.00" data-volume="4892663" data-open-interest="1057944"><title>2026-05-29 00:00 开 4830.00 高 4994.00 低 4826.00 收 4924.00 量 4892663 持仓 1057944</title></rect><text x="619.0" y="544" class="date-label">05-29</text><line x1="744.6" y1="127.1" x2="744.6" y2="211.7" class="down wick"/><rect x="738.6" y="164.0" width="12.0" height="43.8" class="down body"/><rect x="738.6" y="393.1" width="12.0" height="106.9" class="volume-bar"/><rect x="681.8" y="24" width="125.6" height="476" class="candle-hit" data-chart="V0-周线" data-time="2026-06-05 00:00" data-open="4911.00" data-high="5032.00" data-low="4754.00" data-close="4767.00" data-volume="5345820" data-open-interest="1161300"><title>2026-06-05 00:00 开 4911.00 高 5032.00 低 4754.00 收 4767.00 量 5345820 持仓 1161300</title></rect><text x="744.6" y="544" class="date-label">06-05</text><line x1="870.1" y1="197.1" x2="870.1" y2="245.2" class="down wick"/><rect x="864.1" y="207.2" width="12.0" height="8.5" class="down body"/><rect x="864.1" y="402.9" width="12.0" height="97.1" class="volume-bar"/><rect x="807.3" y="24" width="125.6" height="476" class="candle-hit" data-chart="V0-周线" data-time="2026-06-12 00:00" data-open="4769.00" data-high="4802.00" data-low="4644.00" data-close="4741.00" data-volume="4853700" data-open-interest="1197273"><title>2026-06-12 00:00 开 4769.00 高 4802.00 低 4644.00 收 4741.00 量 4853700 持仓 1197273</title></rect><text x="870.1" y="544" class="date-label">06-12</text><line x1="995.7" y1="202.6" x2="995.7" y2="264.7" class="down wick"/><rect x="989.7" y="216.6" width="12.0" height="37.1" class="down body"/><rect x="989.7" y="418.8" width="12.0" height="81.2" class="volume-bar"/><rect x="932.9" y="24" width="125.6" height="476" class="candle-hit" data-chart="V0-周线" data-time="2026-06-19 00:00" data-open="4738.00" data-high="4784.00" data-low="4580.00" data-close="4616.00" data-volume="4061649" data-open-interest="1256297"><title>2026-06-19 00:00 开 4738.00 高 4784.00 低 4580.00 收 4616.00 量 4061649 持仓 1256297</title></rect><text x="995.7" y="544" class="date-label">06-19</text><line x1="1121.2" y1="241.2" x2="1121.2" y2="324.0" class="down wick"/><rect x="1115.2" y="251.0" width="12.0" height="72.1" class="down body"/><rect x="1115.2" y="401.2" width="12.0" height="98.8" class="volume-bar"/><rect x="1058.4" y="24" width="125.6" height="476" class="candle-hit" data-chart="V0-周线" data-time="2026-06-26 00:00" data-open="4625.00" data-high="4657.00" data-low="4385.00" data-close="4388.00" data-volume="4941287" data-open-interest="1421719"><title>2026-06-26 00:00 开 4625.00 高 4657.00 低 4385.00 收 4388.00 量 4941287 持仓 1421719</title></rect><text x="1121.2" y="544" class="date-label">06-26</text><circle cx="116.8" cy="24.0" r="4" class="price-marker"/><text x="124.8" y="16.0" class="price-label">高 5371.00</text><circle cx="1121.2" cy="324.0" r="4" class="price-marker"/><text x="1129.2" y="342.0" class="price-label">低 4385.00</text><polyline points="116.8,500.0 242.3,485.8 367.9,472.4 493.4,456.5 619.0,468.7 744.6,446.3 870.1,438.5 995.7,425.8 1121.2,390.0" fill="none" class="oi-line"/></svg>
             <div class="kline-detail" id="detail-V0-周线">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
           </div>
           <aside class="info-pane">
-            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">接近观察位</span></div>
+            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">接近观察位</span><span class="tag">候选新锚点</span></div>
             
       <section class="line-item">
         <b>1. 当前状态</b>
@@ -337,13 +339,13 @@
             
       <section class="line-item">
         <b>2. 当前观察位</b>
-        <p>压力 4826.00，距最新收盘 9.98%；支撑 4385.00，距最新收盘 0.07%。最大量K线 2026-05-15 00:00，区间 5024.00-5257.00。</p>
+        <p>压力 4826.00，距最新收盘 9.98%；支撑 4385.00，距最新收盘 0.07%。最大量K线 2026-05-15 00:00，区间 5024.00-5257.00。候选新锚点 2026-05-22 00:00，成交量为原锚点的 97.2%，区间 4804.00-5144.00。</p>
       </section>
     
             
       <section class="line-item">
         <b>3. 等待原因</b>
-        <p>价格距离压力观察位 9.98%，位置偏远，等待反抽靠近压力位。</p>
+        <p>价格距离压力观察位 9.98%，位置偏远，等待反抽靠近压力位。锚点提示：后续观察价格是否继续围绕候选新锚点高低点波动，确认后再替换原锚点。</p>
       </section>
     
             
@@ -355,7 +357,7 @@
             
       <section class="line-item">
         <b>5. 失效条件</b>
-        <p>若后续收盘重新站回压力位 4826.00 上方，并且成交量、持仓量支持上攻，空方观察失效，等待新锚点。</p>
+        <p>若后续价格不再围绕候选新锚点 2026-05-22 00:00 的高低点波动，候选锚点失效，继续使用原锚点或等待新锚点。</p>
       </section>
     
           </aside>
@@ -375,7 +377,7 @@
             <div class="kline-detail" id="detail-RB0-小时线">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
           </div>
           <aside class="info-pane">
-            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">接近观察位</span></div>
+            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">接近观察位</span><span class="tag">原锚点有效</span></div>
             
       <section class="line-item">
         <b>1. 当前状态</b>
@@ -385,13 +387,13 @@
             
       <section class="line-item">
         <b>2. 当前观察位</b>
-        <p>压力 3136.00，距最新收盘 1.59%；支撑 3080.00，距最新收盘 0.23%。最大量K线 2026-05-25 22:00，区间 3181.00-3217.00。</p>
+        <p>压力 3136.00，距最新收盘 1.59%；支撑 3080.00，距最新收盘 0.23%。最大量K线 2026-05-25 22:00，区间 3181.00-3217.00。当前仍以原最大成交量K线作为观察锚点。</p>
       </section>
     
             
       <section class="line-item">
         <b>3. 等待原因</b>
-        <p>价格已接近观察位，但仍需等待该位置的收盘确认，以及成交量和持仓量是否支持。</p>
+        <p>价格已接近观察位，但仍需等待该位置的收盘确认，以及成交量和持仓量是否支持。锚点提示：原锚点仍有效，继续观察其高低点的支撑压力转换。</p>
       </section>
     
             
@@ -422,7 +424,7 @@
             <div class="kline-detail" id="detail-V0-小时线">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
           </div>
           <aside class="info-pane">
-            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">接近观察位</span></div>
+            <div class="tag-row"><span class="tag">支撑转压力</span><span class="tag">空方增仓</span><span class="tag">空方控制延续</span><span class="tag">接近观察位</span><span class="tag">原锚点有效</span></div>
             
       <section class="line-item">
         <b>1. 当前状态</b>
@@ -432,13 +434,13 @@
             
       <section class="line-item">
         <b>2. 当前观察位</b>
-        <p>压力 5162.00，距最新收盘 17.80%；支撑 4370.00，距最新收盘 0.27%。最大量K线 2026-05-13 22:00，区间 5162.00-5256.00。</p>
+        <p>压力 5162.00，距最新收盘 17.80%；支撑 4370.00，距最新收盘 0.27%。最大量K线 2026-05-13 22:00，区间 5162.00-5256.00。当前仍以原最大成交量K线作为观察锚点。</p>
       </section>
     
             
       <section class="line-item">
         <b>3. 等待原因</b>
-        <p>价格距离压力观察位 17.80%，位置偏远，等待反抽靠近压力位。</p>
+        <p>价格距离压力观察位 17.80%，位置偏远，等待反抽靠近压力位。锚点提示：原锚点仍有效，继续观察其高低点的支撑压力转换。</p>
       </section>
     
             

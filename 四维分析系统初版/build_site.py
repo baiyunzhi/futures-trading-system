@@ -68,6 +68,7 @@ def period_card(symbol: str, name: str, timeframe: str, frame: pd.DataFrame) -> 
 
     pressure_distance = pct(pressure, latest_close)
     support_distance = pct(support, latest_close)
+    anchor_state = analyze_anchor_state(data, anchor, after, latest_close, pressure, support)
     below_ratio = float((after["close"] < anchor_low).sum() / len(after)) if len(after) else 0.0
     above_ratio = float((after["close"] > anchor_high).sum() / len(after)) if len(after) else 0.0
     inside_ratio = float(((after["close"] >= anchor_low) & (after["close"] <= anchor_high)).sum() / len(after)) if len(after) else 0.0
@@ -84,15 +85,18 @@ def period_card(symbol: str, name: str, timeframe: str, frame: pd.DataFrame) -> 
         pressure_distance=pressure_distance,
         support_distance=support_distance,
     )
+    tags.append(anchor_state["state"])
     readiness_level, readiness_text = readiness_from_tags(tags, pressure_distance, support_distance)
     wait_reason = waiting_reason_from_state(tags, pressure_distance, support_distance, readiness_level)
+    wait_reason = combine_wait_reason(wait_reason, anchor_state)
     status = build_status(tags, close_change, oi_change, below_ratio, above_ratio, inside_ratio)
     observe = (
         f"压力 {pressure:.2f}，距最新收盘 {pressure_distance:.2f}%；"
         f"支撑 {support:.2f}，距最新收盘 {support_distance:.2f}%。"
         f"最大量K线 {format_dt(anchor['datetime'])}，区间 {anchor_low:.2f}-{anchor_high:.2f}。"
+        f"{anchor_state['observe']}"
     )
-    invalidation = build_invalidation(tags, pressure, support, anchor_high, anchor_low)
+    invalidation = build_invalidation(tags, pressure, support, anchor_high, anchor_low, anchor_state)
     tag_html = "".join(f'<span class="tag">{escape(tag)}</span>' for tag in tags)
     chart_id = f"{symbol}-{timeframe}"
     return f"""
@@ -103,7 +107,7 @@ def period_card(symbol: str, name: str, timeframe: str, frame: pd.DataFrame) -> 
         </div>
         <div class="period-layout">
           <div class="chart-pane">
-            {kline_svg(data, chart_id)}
+            {kline_svg(data, chart_id, anchor_state)}
             <div class="kline-detail" id="detail-{escape(chart_id)}">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
           </div>
           <aside class="info-pane">
@@ -150,7 +154,92 @@ def build_status(
     )
 
 
-def build_invalidation(tags: list[str], pressure: float, support: float, anchor_high: float, anchor_low: float) -> str:
+def analyze_anchor_state(
+    data: pd.DataFrame,
+    anchor: pd.Series,
+    after: pd.DataFrame,
+    latest_close: float,
+    pressure: float,
+    support: float,
+) -> dict[str, object]:
+    anchor_volume = float(anchor["volume"])
+    anchor_high = float(anchor["high"])
+    anchor_low = float(anchor["low"])
+    old_distance = min(pct(pressure, latest_close), pct(support, latest_close))
+    if after.empty:
+        return {
+            "state": "原锚点有效",
+            "observe": "最大量K线之后还没有新K线，继续等待后续演化。",
+            "wait": "暂无后续K线，不能重建锚点。",
+            "candidate": None,
+        }
+
+    recent_start = max(0, len(data) - max(6, len(data) // 3))
+    recent = data.iloc[recent_start:]
+    recent_after = recent[recent["datetime"] > anchor["datetime"]]
+    scope = recent_after if not recent_after.empty else after
+    candidate = scope.loc[scope["volume"].idxmax()]
+    candidate_volume = float(candidate["volume"])
+    candidate_ratio = candidate_volume / anchor_volume if anchor_volume else 0.0
+    candidate_low = float(candidate["low"])
+    candidate_high = float(candidate["high"])
+    post_anchor_low = float(after["low"].min())
+    post_anchor_high = float(after["high"].max())
+    near_new_low = candidate_low <= post_anchor_low * 1.01
+    near_new_high = candidate_high >= post_anchor_high * 0.99
+    close_near_candidate = candidate_low <= latest_close <= candidate_high
+    candidate_valid = candidate_ratio >= 0.45 and (near_new_low or near_new_high or close_near_candidate)
+
+    if candidate_valid:
+        return {
+            "state": "候选新锚点",
+            "observe": (
+                f"候选新锚点 {format_dt(candidate['datetime'])}，成交量为原锚点的 {candidate_ratio * 100:.1f}%，"
+                f"区间 {candidate_low:.2f}-{candidate_high:.2f}。"
+            ),
+            "wait": "后续观察价格是否继续围绕候选新锚点高低点波动，确认后再替换原锚点。",
+            "candidate": candidate,
+        }
+
+    if old_distance > 8:
+        return {
+            "state": "锚点待重建",
+            "observe": (
+                f"当前价格距离原锚点相关观察位 {old_distance:.2f}%，旧锚点参考距离偏远，"
+                "等待新的放量K线形成观察区间。"
+            ),
+            "wait": "旧锚点距离过远且没有合格候选锚点，当前以等待新锚点为主。",
+            "candidate": None,
+        }
+
+    return {
+        "state": "原锚点有效",
+        "observe": "当前仍以原最大成交量K线作为观察锚点。",
+        "wait": "原锚点仍有效，继续观察其高低点的支撑压力转换。",
+        "candidate": None,
+    }
+
+
+def combine_wait_reason(wait_reason: str, anchor_state: dict[str, object]) -> str:
+    return f"{wait_reason}锚点提示：{anchor_state['wait']}"
+
+
+def build_invalidation(
+    tags: list[str],
+    pressure: float,
+    support: float,
+    anchor_high: float,
+    anchor_low: float,
+    anchor_state: dict[str, object],
+) -> str:
+    if anchor_state["state"] == "候选新锚点":
+        candidate = anchor_state["candidate"]
+        return (
+            f"若后续价格不再围绕候选新锚点 {format_dt(candidate['datetime'])} 的高低点波动，"
+            "候选锚点失效，继续使用原锚点或等待新锚点。"
+        )
+    if anchor_state["state"] == "锚点待重建":
+        return "若后续出现新的放量K线并形成高低点争夺区，锚点待重建状态结束，切换到候选新锚点观察。"
     if "支撑转压力" in tags:
         return (
             f"若后续收盘重新站回压力位 {pressure:.2f} 上方，并且成交量、持仓量支持上攻，"
@@ -176,7 +265,13 @@ def line_item(title: str, body: str) -> str:
     """
 
 
-def kline_svg(frame: pd.DataFrame, chart_id: str, width: int = 1200, height: int = 560) -> str:
+def kline_svg(
+    frame: pd.DataFrame,
+    chart_id: str,
+    anchor_state: dict[str, object] | None = None,
+    width: int = 1200,
+    height: int = 560,
+) -> str:
     data = frame.sort_values("datetime").reset_index(drop=True)
     if data.empty:
         return ""
@@ -228,6 +323,18 @@ def kline_svg(frame: pd.DataFrame, chart_id: str, width: int = 1200, height: int
         f'<text x="8" y="{sub_top + 12}" class="axis-label">成交量/持仓量</text>',
         f'<line x1="{left_pad}" y1="{sub_top + sub_h}" x2="{width - right_pad}" y2="{sub_top + sub_h}" class="axis"/>',
     ]
+    if anchor_state and anchor_state.get("candidate") is not None:
+        candidate = anchor_state["candidate"]
+        candidate_high = float(candidate["high"])
+        candidate_low = float(candidate["low"])
+        elements.extend(
+            [
+                f'<line x1="{left_pad}" y1="{y(candidate_high):.1f}" x2="{width - right_pad}" y2="{y(candidate_high):.1f}" class="candidate-line"/>',
+                f'<line x1="{left_pad}" y1="{y(candidate_low):.1f}" x2="{width - right_pad}" y2="{y(candidate_low):.1f}" class="candidate-line"/>',
+                f'<text x="{width - right_pad - 190}" y="{y(candidate_high) - 6:.1f}" class="candidate-label">候选高 {candidate_high:.2f}</text>',
+                f'<text x="{width - right_pad - 190}" y="{y(candidate_low) + 16:.1f}" class="candidate-label">候选低 {candidate_low:.2f}</text>',
+            ]
+        )
     oi_points = []
     for idx, row in data.iterrows():
         open_ = float(row["open"])
@@ -433,6 +540,8 @@ def render() -> str:
     .price-marker {{ fill: #f2c94c; stroke: #0b1118; stroke-width: 2; }}
     .price-label, .max-volume-label {{ fill: #e6edf3; font-size: 12px; font-weight: 600; }}
     .max-volume-line {{ stroke: #f2c94c; stroke-width: 1.4; stroke-dasharray: 6 4; opacity: 0.88; }}
+    .candidate-line {{ stroke: #4cc9f0; stroke-width: 1.4; stroke-dasharray: 4 4; opacity: 0.92; }}
+    .candidate-label {{ fill: #4cc9f0; font-size: 12px; font-weight: 700; }}
     .kline line, .kline polyline, .kline text, .kline circle, .kline rect:not(.candle-hit) {{ pointer-events: none; }}
     .candle-hit {{ fill: transparent; cursor: pointer; pointer-events: all; }}
     .candle-hit:hover {{ fill: rgba(242, 201, 76, 0.08); }}
