@@ -5,7 +5,15 @@ from html import escape
 
 import pandas as pd
 
-from market_system import SYMBOLS, TIMEFRAMES, analyze_market, build_timeframes, load_market_data
+from market_system import (
+    SYMBOLS,
+    TIMEFRAMES,
+    analyze_market,
+    build_timeframes,
+    current_pressure_level,
+    format_dt,
+    load_market_data,
+)
 
 
 ROOT = Path(__file__).resolve().parent
@@ -20,6 +28,176 @@ DATA_FILES = {
     },
 }
 WEB_PATH = ROOT / "web" / "index.html"
+
+
+def build_comparison_module(reports, data: dict[str, pd.DataFrame]) -> str:
+    cards = []
+    snapshots = []
+    reports_by_symbol = {report.symbol: report for report in reports}
+    for symbol, meta in SYMBOLS.items():
+        report = reports_by_symbol.get(symbol)
+        if report is None:
+            continue
+        daily = data["daily"]
+        hourly = data["hourly"]
+        frames = build_timeframes(daily[daily["symbol"] == symbol], hourly[hourly["symbol"] == symbol])
+        snapshot = build_symbol_snapshot(symbol, meta["name"], frames)
+        snapshots.append(snapshot)
+        cards.append(comparison_card(snapshot))
+    if not cards:
+        return ""
+    conclusion = comparison_conclusion(snapshots)
+    return f"""
+    <section class="comparison">
+      <div class="comparison-head">
+        <h2>品种对比</h2>
+        <p>{escape(conclusion)}</p>
+      </div>
+      <div class="comparison-grid">
+        {"".join(cards)}
+      </div>
+    </section>
+    """
+
+
+def build_symbol_snapshot(symbol: str, name: str, frames: dict[str, pd.DataFrame]) -> dict[str, object]:
+    timeframe_rows = [timeframe_score(timeframe, frames[timeframe]) for timeframe in TIMEFRAMES if timeframe in frames]
+    short_score = sum(float(row["short_score"]) for row in timeframe_rows)
+    long_score = sum(float(row["long_score"]) for row in timeframe_rows)
+    daily = next(row for row in timeframe_rows if row["timeframe"] == "日线")
+    hourly = next(row for row in timeframe_rows if row["timeframe"] == "小时线")
+    if short_score > long_score + 3:
+        control = "空方控制"
+    elif long_score > short_score + 3:
+        control = "多方控制"
+    else:
+        control = "多空拉锯"
+    distance = min(float(daily["pressure_distance_pct"]), float(hourly["pressure_distance_pct"]))
+    if control == "空方控制" and distance <= 2:
+        action = "优先观察"
+        reason = "价格接近支撑转压力位，适合等待反抽失败确认。"
+    elif control == "空方控制":
+        action = "等待反抽"
+        reason = "空方控制明确，但当前价格离压力位较远，追空位置不好。"
+    elif control == "多方控制":
+        action = "等待回踩"
+        reason = "多方控制占优，等待回踩支撑后再观察是否守住。"
+    else:
+        action = "等待方向"
+        reason = "多空还在区间内拉锯，支撑压力没有给出明确转换。"
+    return {
+        "symbol": symbol,
+        "name": name,
+        "control": control,
+        "action": action,
+        "reason": reason,
+        "short_score": short_score,
+        "long_score": long_score,
+        "timeframes": timeframe_rows,
+        "distance": distance,
+    }
+
+
+def timeframe_score(timeframe: str, frame: pd.DataFrame) -> dict[str, object]:
+    data = frame.sort_values("datetime").reset_index(drop=True)
+    latest = data.iloc[-1]
+    first = data.iloc[0]
+    anchor = data.loc[data["volume"].idxmax()]
+    after = data[data["datetime"] > anchor["datetime"]]
+    high = float(anchor["high"])
+    low = float(anchor["low"])
+    close = float(latest["close"])
+    close_change = close - float(first["close"])
+    oi_change = float(latest["open_interest"] - first["open_interest"])
+    pressure = high
+    support = low
+    if not after.empty and close < low:
+        pressure = current_pressure_level(after, low)
+    elif not after.empty and close > high:
+        support = high
+    pressure_distance_pct = abs(pressure - close) / close * 100 if close else 999.0
+    support_distance_pct = abs(close - support) / close * 100 if close else 999.0
+    below_ratio = float((after["close"] < low).sum() / len(after)) if len(after) else 0.0
+    above_ratio = float((after["close"] > high).sum() / len(after)) if len(after) else 0.0
+    inside_ratio = float(((after["close"] >= low) & (after["close"] <= high)).sum() / len(after)) if len(after) else 0.0
+    short_score = 0.0
+    long_score = 0.0
+    if close < low:
+        short_score += 3
+    elif close > high:
+        long_score += 3
+    else:
+        short_score += 0.5
+        long_score += 0.5
+    short_score += below_ratio * 3
+    long_score += above_ratio * 3
+    if close_change < 0 and oi_change > 0:
+        short_score += 3
+    elif close_change > 0 and oi_change > 0:
+        long_score += 3
+    elif close_change < 0 and oi_change < 0:
+        short_score += 1
+    elif close_change > 0 and oi_change < 0:
+        long_score += 1
+    if inside_ratio >= 0.45:
+        short_score -= 0.5
+        long_score -= 0.5
+    return {
+        "timeframe": timeframe,
+        "anchor_time": format_dt(anchor["datetime"]),
+        "anchor_low": low,
+        "anchor_high": high,
+        "latest_close": close,
+        "pressure": pressure,
+        "support": support,
+        "pressure_distance_pct": pressure_distance_pct,
+        "support_distance_pct": support_distance_pct,
+        "below_ratio": below_ratio,
+        "above_ratio": above_ratio,
+        "inside_ratio": inside_ratio,
+        "close_change": close_change,
+        "oi_change": oi_change,
+        "short_score": short_score,
+        "long_score": long_score,
+    }
+
+
+def comparison_card(snapshot: dict[str, object]) -> str:
+    rows = []
+    for row in snapshot["timeframes"]:
+        rows.append(
+            "<li>"
+            f"{escape(str(row['timeframe']))}：最大量K线 {escape(str(row['anchor_time']))}，"
+            f"区间 {float(row['anchor_low']):.2f}-{float(row['anchor_high']):.2f}，"
+            f"最新收盘 {float(row['latest_close']):.2f}，"
+            f"收在锚点低点下方占比 {float(row['below_ratio']) * 100:.1f}%，"
+            f"持仓变化 {float(row['oi_change']):+.0f}，"
+            f"距离当前压力位 {float(row['pressure_distance_pct']):.2f}%。"
+            "</li>"
+        )
+    return f"""
+      <article class="comparison-card">
+        <div class="comparison-title">
+          <h3>{escape(str(snapshot["name"]))}({escape(str(snapshot["symbol"]))})</h3>
+          <span>{escape(str(snapshot["control"]))}</span>
+        </div>
+        <p class="comparison-action">{escape(str(snapshot["action"]))}</p>
+        <p>{escape(str(snapshot["reason"]))}</p>
+        <ul>{''.join(rows)}</ul>
+      </article>
+    """
+
+
+def comparison_conclusion(snapshots: list[dict[str, object]]) -> str:
+    if len(snapshots) < 2:
+        return "当前只有一个品种，系统先给出单品种观察状态。"
+    strongest = max(snapshots, key=lambda item: float(item["short_score"]))
+    nearest = min(snapshots, key=lambda item: float(item["distance"]))
+    return (
+        f"当前对比结果：{strongest['name']}({strongest['symbol']}) 空方控制更强；"
+        f"{nearest['name']}({nearest['symbol']}) 距离压力观察位更近，更适合优先盯反抽确认。"
+        "若方向明确但价格远离压力位，系统归为等待，不追。"
+    )
 
 
 def build_timeframe_sections(reports, data: dict[str, pd.DataFrame]) -> str:
@@ -250,6 +428,71 @@ def render_html(reports, data: dict[str, pd.DataFrame]) -> str:
       font-size: 13px;
       line-height: 1.7;
     }}
+    .comparison {{
+      background: #121821;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }}
+    .comparison-head h2 {{
+      margin: 0 0 8px;
+      font-size: 18px;
+    }}
+    .comparison-head p {{
+      margin: 0 0 14px;
+      color: #d7dee8;
+    }}
+    .comparison-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 12px;
+    }}
+    .comparison-card {{
+      border: 1px solid var(--line);
+      background: #0f141b;
+      border-radius: 6px;
+      padding: 14px;
+    }}
+    .comparison-title {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }}
+    .comparison-title h3 {{
+      margin: 0;
+      font-size: 16px;
+    }}
+    .comparison-title span {{
+      border: 1px solid #4b3f18;
+      background: #17140a;
+      color: var(--warn);
+      border-radius: 999px;
+      padding: 3px 10px;
+      font-size: 12px;
+      white-space: nowrap;
+    }}
+    .comparison-action {{
+      color: var(--blue);
+      font-weight: 700;
+      margin: 0 0 6px;
+    }}
+    .comparison-card p {{
+      color: #c9d1d9;
+      margin: 0 0 10px;
+    }}
+    .comparison-card ul {{
+      padding-left: 18px;
+      margin: 0;
+    }}
+    .comparison-card li {{
+      margin: 6px 0;
+      color: #d7dee8;
+      font-size: 13px;
+      line-height: 1.65;
+    }}
     .kline {{
       width: 100%;
       height: 520px;
@@ -306,6 +549,8 @@ def render_html(reports, data: dict[str, pd.DataFrame]) -> str:
         <li>每个品种、每个周期独立执行同一套支撑压力演变工作流：最大成交量K线作为观察锚点，后续突破、跌破、假突破、回抽失败、支撑转压力或压力转支撑都自动写入行情表述。</li>
       </ol>
     </section>
+
+    {build_comparison_module(reports, data)}
 
     {build_timeframe_sections(reports, data)}
   </main>

@@ -82,6 +82,71 @@
       font-size: 13px;
       line-height: 1.7;
     }
+    .comparison {
+      background: #121821;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .comparison-head h2 {
+      margin: 0 0 8px;
+      font-size: 18px;
+    }
+    .comparison-head p {
+      margin: 0 0 14px;
+      color: #d7dee8;
+    }
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 12px;
+    }
+    .comparison-card {
+      border: 1px solid var(--line);
+      background: #0f141b;
+      border-radius: 6px;
+      padding: 14px;
+    }
+    .comparison-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .comparison-title h3 {
+      margin: 0;
+      font-size: 16px;
+    }
+    .comparison-title span {
+      border: 1px solid #4b3f18;
+      background: #17140a;
+      color: var(--warn);
+      border-radius: 999px;
+      padding: 3px 10px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .comparison-action {
+      color: var(--blue);
+      font-weight: 700;
+      margin: 0 0 6px;
+    }
+    .comparison-card p {
+      color: #c9d1d9;
+      margin: 0 0 10px;
+    }
+    .comparison-card ul {
+      padding-left: 18px;
+      margin: 0;
+    }
+    .comparison-card li {
+      margin: 6px 0;
+      color: #d7dee8;
+      font-size: 13px;
+      line-height: 1.65;
+    }
     .kline {
       width: 100%;
       height: 520px;
@@ -138,6 +203,38 @@
         <li>每个品种、每个周期独立执行同一套支撑压力演变工作流：最大成交量K线作为观察锚点，后续突破、跌破、假突破、回抽失败、支撑转压力或压力转支撑都自动写入行情表述。</li>
       </ol>
     </section>
+
+    
+    <section class="comparison">
+      <div class="comparison-head">
+        <h2>品种对比</h2>
+        <p>当前对比结果：PVC(V0) 空方控制更强；螺纹钢(RB0) 距离压力观察位更近，更适合优先盯反抽确认。若方向明确但价格远离压力位，系统归为等待，不追。</p>
+      </div>
+      <div class="comparison-grid">
+        
+      <article class="comparison-card">
+        <div class="comparison-title">
+          <h3>螺纹钢(RB0)</h3>
+          <span>空方控制</span>
+        </div>
+        <p class="comparison-action">优先观察</p>
+        <p>价格接近支撑转压力位，适合等待反抽失败确认。</p>
+        <ul><li>日线：最大量K线 2026-05-26 00:00，区间 3138.00-3218.00，最新收盘 3093.00，收在锚点低点下方占比 27.3%，持仓变化 +111042，距离当前压力位 1.45%。</li><li>周线：最大量K线 2026-05-29 00:00，区间 3136.00-3238.00，最新收盘 3093.00，收在锚点低点下方占比 50.0%，持仓变化 +16182，距离当前压力位 1.39%。</li><li>小时线：最大量K线 2026-05-25 22:00，区间 3181.00-3217.00，最新收盘 3087.00，收在锚点低点下方占比 90.5%，持仓变化 +133392，距离当前压力位 1.59%。</li></ul>
+      </article>
+    
+      <article class="comparison-card">
+        <div class="comparison-title">
+          <h3>PVC(V0)</h3>
+          <span>空方控制</span>
+        </div>
+        <p class="comparison-action">等待反抽</p>
+        <p>空方控制明确，但当前价格离压力位较远，追空位置不好。</p>
+        <ul><li>日线：最大量K线 2026-05-14 00:00，区间 5054.00-5257.00，最新收盘 4388.00，收在锚点低点下方占比 96.7%，持仓变化 +498629，距离当前压力位 14.08%。</li><li>周线：最大量K线 2026-05-15 00:00，区间 5024.00-5257.00，最新收盘 4388.00，收在锚点低点下方占比 100.0%，持仓变化 +508653，距离当前压力位 9.98%。</li><li>小时线：最大量K线 2026-05-13 22:00，区间 5162.00-5256.00，最新收盘 4382.00，收在锚点低点下方占比 100.0%，持仓变化 +507945，距离当前压力位 17.80%。</li></ul>
+      </article>
+    
+      </div>
+    </section>
+    
 
     
                 <section class="period">
