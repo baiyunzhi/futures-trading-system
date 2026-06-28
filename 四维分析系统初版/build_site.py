@@ -279,24 +279,35 @@ def kline_svg(frame: pd.DataFrame, chart_id: str, width: int = 1200, height: int
     return "".join(elements)
 
 
-def symbol_summary(symbol: str, name: str, frames: dict[str, pd.DataFrame]) -> str:
-    cards = []
-    for timeframe in TIMEFRAMES:
-        if timeframe in frames:
-            cards.append(period_card(symbol, name, timeframe, frames[timeframe]))
-    return "\n".join(cards)
-
-
-def render() -> str:
-    data = load_market_data(DATA_FILES)
-    blocks = []
-    for symbol, meta in SYMBOLS.items():
+def build_frames_by_symbol(data: dict[str, pd.DataFrame]) -> dict[str, dict[str, pd.DataFrame]]:
+    frames_by_symbol: dict[str, dict[str, pd.DataFrame]] = {}
+    for symbol in SYMBOLS:
         daily = data["daily"][data["daily"]["symbol"] == symbol]
         hourly = data["hourly"][data["hourly"]["symbol"] == symbol]
         if daily.empty:
             continue
-        frames = build_timeframes(daily, hourly)
-        blocks.append(symbol_summary(symbol, meta["name"], frames))
+        frames_by_symbol[symbol] = build_timeframes(daily, hourly)
+    return frames_by_symbol
+
+
+def timeframe_sections(frames_by_symbol: dict[str, dict[str, pd.DataFrame]]) -> str:
+    sections = []
+    for timeframe in TIMEFRAMES:
+        cards = []
+        for symbol, meta in SYMBOLS.items():
+            frames = frames_by_symbol.get(symbol)
+            if not frames or timeframe not in frames:
+                continue
+            cards.append(period_card(symbol, meta["name"], timeframe, frames[timeframe]))
+        if cards:
+            sections.append(f'<h2 class="period-group-title">{escape(timeframe)}对比</h2>')
+            sections.extend(cards)
+    return "\n".join(sections)
+
+
+def render() -> str:
+    data = load_market_data(DATA_FILES)
+    blocks = timeframe_sections(build_frames_by_symbol(data))
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -334,6 +345,15 @@ def render() -> str:
       display: grid;
       grid-template-columns: repeat(2, minmax(680px, 1fr));
       gap: 14px;
+    }}
+    .period-group-title {{
+      grid-column: 1 / -1;
+      margin: 10px 0 0;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #0e141c;
+      font-size: 18px;
     }}
     .period-card {{
       border: 1px solid var(--line);
@@ -462,7 +482,7 @@ def render() -> str:
     <p class="note">减法版：每个品种、每个周期只输出当前状态、当前观察位、等待原因、准备等级、失效条件。</p>
   </header>
   <main>
-    {"".join(blocks)}
+    {blocks}
   </main>
   <script>
     document.addEventListener("click", function (event) {{
