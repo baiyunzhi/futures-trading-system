@@ -958,7 +958,7 @@ def timeframe_sections(
                 continue
             cards.append(period_card(symbol, meta["name"], timeframe, frames[timeframe], priorities.get(symbol)))
         if cards:
-            sections.append(f'<h2 class="period-group-title">{escape(timeframe)}对比</h2>')
+            sections.append(f'<h2 class="period-group-title">{escape(timeframe)}观察</h2>')
             sections.extend(cards)
     return "\n".join(sections)
 
@@ -1003,7 +1003,7 @@ def render() -> str:
     main {{
       padding: 18px 28px 44px;
       display: grid;
-      grid-template-columns: repeat(2, minmax(680px, 1fr));
+      grid-template-columns: minmax(0, 1fr);
       gap: 14px;
     }}
     .period-group-title {{
@@ -1059,22 +1059,22 @@ def render() -> str:
     }}
     .selection-columns {{
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
       gap: 14px;
     }}
     .selection-grid {{
       display: grid;
-      grid-template-columns: repeat(2, minmax(180px, 1fr));
+      grid-template-columns: minmax(0, 1fr);
       gap: 8px;
     }}
     .event-grid {{
-      grid-template-columns: repeat(2, minmax(190px, 1fr));
+      grid-template-columns: minmax(0, 1fr);
     }}
     .selection-card {{
       border: 1px solid #314055;
       background: #111821;
       border-radius: 6px;
-      padding: 8px 10px;
+      padding: 7px 10px;
     }}
     .selection-card b {{
       color: var(--blue);
@@ -1084,6 +1084,15 @@ def render() -> str:
       margin: 6px 0 0;
       color: #c9d1d9;
       font-size: 12px;
+    }}
+    .event-card {{
+      display: grid;
+      grid-template-columns: 160px minmax(0, 1fr);
+      gap: 10px;
+      align-items: baseline;
+    }}
+    .event-card p {{
+      margin: 0;
     }}
     .period-card {{
       border: 1px solid var(--line);
@@ -1204,11 +1213,6 @@ def render() -> str:
     .level-1 {{ border-left: 4px solid #4cc9f0; }}
     .level-2 {{ border-left: 4px solid #f2c94c; }}
     .level-3 {{ border-left: 4px solid #ff7b72; }}
-    @media (max-width: 1480px) {{
-      main {{
-        grid-template-columns: 1fr;
-      }}
-    }}
     @media (max-width: 900px) {{
       main {{
         padding: 14px;
