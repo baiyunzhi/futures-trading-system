@@ -55,8 +55,12 @@ def period_card(symbol: str, name: str, timeframe: str, frame: pd.DataFrame) -> 
     latest_close = float(latest["close"])
     close_change = latest_close - float(first["close"])
     oi_change = float(latest["open_interest"] - first["open_interest"])
+    observation_chain = build_observation_chain(data, anchor)
 
-    if latest_close < anchor_low:
+    if observation_chain["current_pressure"] is not None:
+        pressure = float(observation_chain["current_pressure"])
+        support = float(observation_chain["current_support"])
+    elif latest_close < anchor_low:
         pressure = current_pressure_level(after, anchor_low)
         support = float(after["low"].min()) if not after.empty else float(latest["low"])
     elif latest_close > anchor_high:
@@ -94,6 +98,7 @@ def period_card(symbol: str, name: str, timeframe: str, frame: pd.DataFrame) -> 
         f"压力 {pressure:.2f}，距最新收盘 {pressure_distance:.2f}%；"
         f"支撑 {support:.2f}，距最新收盘 {support_distance:.2f}%。"
         f"最大量K线 {format_dt(anchor['datetime'])}，区间 {anchor_low:.2f}-{anchor_high:.2f}。"
+        f"{observation_chain['text']}"
         f"{anchor_state['observe']}"
     )
     invalidation = build_invalidation(tags, pressure, support, anchor_high, anchor_low, anchor_state)
@@ -107,7 +112,7 @@ def period_card(symbol: str, name: str, timeframe: str, frame: pd.DataFrame) -> 
         </div>
         <div class="period-layout">
           <div class="chart-pane">
-            {kline_svg(data, chart_id, anchor_state)}
+            {kline_svg(data, chart_id, anchor_state, observation_chain)}
             <div class="kline-detail" id="detail-{escape(chart_id)}">点击K线查看该根K线的时间、开高低收、成交量、持仓量。</div>
           </div>
           <aside class="info-pane">
@@ -152,6 +157,80 @@ def build_status(
         f"收在高点上方占比 {above_ratio * 100:.1f}%，"
         f"收在区间内占比 {inside_ratio * 100:.1f}%。{attitude}"
     )
+
+
+def build_observation_chain(data: pd.DataFrame, anchor: pd.Series) -> dict[str, object]:
+    anchor_low = float(anchor["low"])
+    latest = data.iloc[-1]
+    latest_close = float(latest["close"])
+    after = data[data["datetime"] > anchor["datetime"]].reset_index(drop=True)
+    chain: list[dict[str, object]] = []
+    if after.empty:
+        return {
+            "levels": chain,
+            "current_pressure": None,
+            "current_support": anchor_low,
+            "text": "观察位链条：最大量K线之后暂无演变。"
+        }
+
+    if not after[after["close"] < anchor_low].empty:
+        chain.append(
+            {
+                "level": anchor_low,
+                "time": anchor["datetime"],
+                "kind": "原锚点低点失守",
+            }
+        )
+
+    previous_level = anchor_low
+    lows = after.reset_index(drop=True)
+    for idx in range(len(lows) - 3):
+        row = lows.iloc[idx]
+        level = float(row["low"])
+        if level >= previous_level * 0.992:
+            continue
+        next_closes = lows.iloc[idx + 1 : idx + 4]["close"]
+        if len(next_closes) < 2 or not bool((next_closes > level).all()):
+            continue
+        later = lows.iloc[idx + 4 :]
+        if later.empty or later[later["close"] < level].empty:
+            continue
+        item = {
+            "level": level,
+            "time": row["datetime"],
+            "kind": "阶段支撑失守",
+            "idx": idx,
+        }
+        if chain and chain[-1].get("kind") == "阶段支撑失守" and idx - int(chain[-1].get("idx", -99)) <= 3:
+            if level < float(chain[-1]["level"]):
+                chain[-1] = item
+        else:
+            chain.append(item)
+        previous_level = level
+
+    # Keep the chain readable and focused on the latest valid observation levels.
+    if len(chain) > 5:
+        chain = [chain[0], *chain[-4:]]
+    current_pressure = float(chain[-1]["level"]) if chain else None
+    if current_pressure is not None:
+        later_than_pressure = data[data["datetime"] > chain[-1]["time"]]
+        support_scope = later_than_pressure if not later_than_pressure.empty else after
+        current_support = float(support_scope["low"].min())
+    else:
+        current_support = float(after["low"].min()) if latest_close < anchor_low else anchor_low
+    if chain:
+        chain_text = " → ".join(f"{float(item['level']):.2f}" for item in chain)
+        text = f"观察位链条：{chain_text}。当前按最近失守位 {current_pressure:.2f} 作为压力观察位。"
+        if current_support < current_pressure:
+            text += f" 当前下方未确认支撑为 {current_support:.2f}。"
+    else:
+        text = "观察位链条：价格尚未形成有效的支撑压力下移链条。"
+    return {
+        "levels": chain,
+        "current_pressure": current_pressure,
+        "current_support": current_support,
+        "text": text,
+    }
 
 
 def analyze_anchor_state(
@@ -269,6 +348,7 @@ def kline_svg(
     frame: pd.DataFrame,
     chart_id: str,
     anchor_state: dict[str, object] | None = None,
+    observation_chain: dict[str, object] | None = None,
     width: int = 1200,
     height: int = 560,
 ) -> str:
@@ -335,6 +415,16 @@ def kline_svg(
                 f'<text x="{width - right_pad - 190}" y="{y(candidate_low) + 16:.1f}" class="candidate-label">候选低 {candidate_low:.2f}</text>',
             ]
         )
+    if observation_chain:
+        chain_levels = observation_chain.get("levels", [])
+        for item in chain_levels[-4:]:
+            level = float(item["level"])
+            elements.extend(
+                [
+                    f'<line x1="{left_pad}" y1="{y(level):.1f}" x2="{width - right_pad}" y2="{y(level):.1f}" class="chain-line"/>',
+                    f'<text x="{left_pad + 8}" y="{y(level) - 6:.1f}" class="chain-label">观察位 {level:.2f}</text>',
+                ]
+            )
     oi_points = []
     for idx, row in data.iterrows():
         open_ = float(row["open"])
@@ -542,6 +632,8 @@ def render() -> str:
     .max-volume-line {{ stroke: #f2c94c; stroke-width: 1.4; stroke-dasharray: 6 4; opacity: 0.88; }}
     .candidate-line {{ stroke: #4cc9f0; stroke-width: 1.4; stroke-dasharray: 4 4; opacity: 0.92; }}
     .candidate-label {{ fill: #4cc9f0; font-size: 12px; font-weight: 700; }}
+    .chain-line {{ stroke: #ff7b72; stroke-width: 1.5; stroke-dasharray: 8 4; opacity: 0.9; }}
+    .chain-label {{ fill: #ffb3ad; font-size: 12px; font-weight: 700; }}
     .kline line, .kline polyline, .kline text, .kline circle, .kline rect:not(.candle-hit) {{ pointer-events: none; }}
     .candle-hit {{ fill: transparent; cursor: pointer; pointer-events: all; }}
     .candle-hit:hover {{ fill: rgba(242, 201, 76, 0.08); }}
